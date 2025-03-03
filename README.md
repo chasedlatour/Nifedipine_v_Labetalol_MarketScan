@@ -36,3 +36,17 @@ Some other relevant files include:
 - `combine_boot_estimates.sas` - Macro to combine estimates from the bootstrapped samples.
 - `combine_point_estimates.sas` - Macro to combine the point estimates from the original sample.
 - `competing2risk_weights.sas` - Macro to implement Aalen-Johansen estimator with 2 competing events. Includes application of standardized mortality ratio and inverse probability of censoring weights.
+- `competing3risk_weights.sas` - Macro to implement Aalen-Johansen estimator with 3 competing events. Includes application of standardized mortality ratio and inverse probability of censoring weights.
+- `count_missing_zero.sas` - Macro that counts the number of bootstrapped sample with estimated risks of 0 or missing values for estimates.
+- `full_fup_weights.sas` - Macro that conducts weighted proportions to calculate effect estimates in a sample with full follow-up (e.g., complete case analyses).
+- `getga.sas` - Macro used only for the file `01b_clean_preg_cohort.sas` to re-estimate LMPs under different assumptions about the gestational age at the claim date.
+- `logparse.sas` - Macro used in setup.
+- `overall_esetimates_w_ci.sas` - Macro that outputs the estimates in the overall sample with the 95% confidence interval based upon bootstrapped standard errors.
+- `passinfo.sas` - Macro used in setup.
+- `repeat_in_subset.sas` - Macro that repeats the analysis in a subset of the cohort.
+- `setup.sas` - Macro run at the beginning of the program that sets necessary libraries and calls in macro files.
+- `stddiff.sas` - Macro used to calculate standardized mean differences within levels of a covariate. Estimates across levels of the same covariate are incorrect.
+- `stat_estimates_w_ci.sas` - Macro that returns the stratified risk, risk difference, and risk ratio estimates with 95% confidence intervals based upon bootstrapped standard errors.
+- `table1.sas` - Macro that returns a weighted and unweighted set of descriptive characteristics fo the study population.
+
+Data are accessible after payment to Merative with an appropriate data use agreement. All analyses were approved by UNC's Institutional Review Board. No data are uploaded to this repository.
