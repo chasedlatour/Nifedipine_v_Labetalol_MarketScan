@@ -1,0 +1,672 @@
+---
+title: "Aim2 Figures"
+author: "Chase Latour"
+date: "2025-02-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(tidyverse)
+library(haven)
+library(viridis) 
+library(ggstance)
+
+```
+
+# Pull in the Survival Data
+
+```{r cars}
+
+survival_loss_lt14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_primary_point_1.sas7bdat') %>% 
+  mutate(
+    Outcome = "Pregnancy Loss",
+    GA = "<14 Weeks"
+  )
+
+survival_loss_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_primary_point_2.sas7bdat') %>% 
+  mutate(
+    Outcome = "Pregnancy Loss",
+    GA = ">=14 Weeks"
+  )
+
+survival_ptb_lt14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_primary_point_ptb_1.sas7bdat') %>% 
+  mutate(
+    Outcome = "Preterm Birth",
+    GA = "<14 Weeks"
+  )
+
+survival_ptb_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_primary_point_ptb_1.sas7bdat') %>% 
+  mutate(
+    Outcome = "Preterm Birth",
+    GA = ">=14 Weeks"
+  )
+
+```
+
+# Cumulative Incidence Curves for Study Outcomes
+
+```{r}
+
+# Function to make the plot
+
+cum_incidence_primary <- function(survivaldsn, outcome_quo, ga_quo){
+  
+  ggplot(survivaldsn, aes(x = days, 
+                          y = cum_outcome, 
+                          color = as.factor(trt), 
+                          group = trt)) +
+  geom_line(size = 1) +
+  geom_point() +  # Optional: Add points for better visualization
+  labs(title = paste0("Incidence of ", outcome_quo), 
+       subtitle = paste0("Gestational Age ", ga_quo, " at Index"),
+       x = "Days from Index Date", 
+       y = "Cumualtive Indicidence", color = "Treatment") +
+  ylim(0, 0.35) + 
+  scale_x_continuous(breaks = seq(0, 260, by = 50),
+                     limits = c(0, 260)) +
+  scale_color_manual(values = c("0" = "navy", "1" = "orange"), 
+                     labels = c("Labetalol", "Nifedipine")) +
+  theme_minimal(base_size = 12)+
+  theme(legend.position = "bottom")
+  
+  
+}
+
+
+#height and width of figures
+h=4
+w=4
+
+pdf("Cumulative incidence-loss-lt14 weeks.pdf", height = h, width = w)
+cum_incidence_primary(survivalds=survival_loss_lt14,
+                      outcome_quo="Pregnancy Loss",
+                      ga_quo="<14 Weeks")
+dev.off()
+
+
+pdf("Cumulative incidence-loss-ge14 weeks.pdf", height=h, width=w)
+cum_incidence_primary(survivalds=survival_loss_ge14,
+                      outcome_quo="Pregnancy Loss",
+                      ga_quo=">=14 Weeks")
+dev.off()
+
+pdf("Cumulative incidence-ptb-lt14 weeks.pdf", height=h, width=w)
+cum_incidence_primary(survivalds=survival_ptb_lt14,
+                      outcome_quo="Preterm Birth",
+                      ga_quo="<14 Weeks")
+dev.off()
+
+pdf("Cumulative incidence-ptb-ge14 weeks.pdf", height=h, width=w)
+cum_incidence_primary(survivalds=survival_ptb_lt14,
+                      outcome_quo="Preterm Birth",
+                      ga_quo=">=14 Weeks")
+dev.off()
+
+
+```
+
+# Pull in the Cohort Data
+
+```{r}
+
+trim_cohort_lt14 <-  read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_cohort_trim_1.sas7bdat')
+
+trim_cohort_ge14 <-  read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_cohort_trim_2.sas7bdat')
+
+
+#FUNCTION: get_loss_counts
+# Get the relevant counts of number of people at-risk for pregnancy loss outcome
+get_loss_counts <- function(dsn){
+  
+  # Get counts for Loss
+  dsn %>% 
+    mutate(
+      p250 = ifelse(dt_gapreg - dt_index >= 250, 1, 0),
+      p200 = ifelse(dt_gapreg - dt_index >= 200, 1, 0),
+      p150 = ifelse(dt_gapreg - dt_index >= 150, 1, 0),
+      p100 = ifelse(dt_gapreg - dt_index >= 100, 1, 0),
+      p50 = ifelse(dt_gapreg - dt_index >= 50, 1, 0),
+      p0 = ifelse(dt_gapreg - dt_index >= 0, 1, 0)
+    ) %>% 
+    group_by(trt) %>% 
+    summarize(
+      sum0 = sum(p0),
+      sum50 = sum(p50),
+      sum100 = sum(p100),
+      sum150 = sum(p150),
+      sum200 = sum(p200),
+      sum250 = sum(p250)
+    )
+  
+}
+
+
+get_ptb_counts <- function(dsn){
+  
+  dsn %>% 
+    mutate(
+      p250 = ifelse(dt_gapreg_ptb - dt_index >= 250, 1, 0),
+      p200 = ifelse(dt_gapreg_ptb - dt_index >= 200, 1, 0),
+      p150 = ifelse(dt_gapreg_ptb - dt_index >= 150, 1, 0),
+      p100 = ifelse(dt_gapreg_ptb - dt_index >= 100, 1, 0),
+      p50 = ifelse(dt_gapreg_ptb - dt_index >= 50, 1, 0),
+      p0 = ifelse(dt_gapreg_ptb - dt_index >= 0, 1, 0)
+    ) %>% 
+    group_by(trt) %>% 
+    summarize(
+      sum0 = sum(p0),
+      sum50 = sum(p50),
+      sum100 = sum(p100),
+      sum150 = sum(p150),
+      sum200 = sum(p200),
+      sum250 = sum(p250)
+    )
+  
+}
+
+
+# Get loss counts
+get_loss_counts(trim_cohort_lt14)
+get_loss_counts(trim_cohort_ge14)
+
+# Get ptb counts
+get_ptb_counts(trim_cohort_lt14)
+get_ptb_counts(trim_cohort_ge14)
+
+
+```
+
+
+# Cumulative Incidence Curves for Pregnancy Outcomes
+
+```{r}
+
+# Function to make the plot
+
+cum_incidence_primary <- function(survivaldsn, ga_quo, trt_quo){
+  
+  dsn <- survivaldsn %>% 
+     mutate(
+        IAB = cum_comprisk1,
+        SAB = cum_comprisk1+cum_outcome,
+        LB = cum_comprisk1+cum_outcome+cum_comprisk2
+      ) %>% 
+    select(trt, days, IAB, SAB, LB) %>% 
+    pivot_longer(
+      cols = c(IAB, SAB, LB),
+      names_to = "Outcome",
+      values_to = "Incidence"
+    ) %>% 
+    mutate(
+      Outcome = case_when(Outcome == 'IAB' ~ "Induced Abortion",
+                          Outcome == "SAB" ~ "Pregnancy Loss",
+                          Outcome == "LB" ~ "Live Birth")
+    )
+  
+  plot <- ggplot(dsn, aes(x = days,
+                  y = Incidence, 
+                  color = as.factor(Outcome), 
+                  group = Outcome)) +
+  geom_line(size = 1) +
+  # geom_point() +  # Optional: Add points for better visualization
+  labs(title = paste0("Gestational Age ", ga_quo, " at Index"), 
+       subtitle = paste0(trt_quo, " Initiators"),
+       x = "Days from Index Date", 
+       y = "Cumualtive Indicidence", 
+       color = "Outcome") +
+  ylim(0, 1.01) + 
+  scale_x_continuous(breaks = seq(0, 260, by = 50),
+                     limits = c(0, 260)) +
+  scale_fill_viridis()+
+  # scale_color_manual(values = c("IAB" = "navy", "SAB" = "orange", "LB" = "grey"), 
+  #                    labels = c("IAB"="Induced Abortion", 
+  #                               "SAB" = "Pregnancy Loss", 
+  #                               "LB" = "Live birth")) +
+  theme_minimal(base_size = 11)+
+  theme(legend.position = "bottom")
+  
+  return(plot)
+  
+}
+
+
+
+
+
+
+
+#height and width of figures
+h=5
+w=5
+
+pdf("Cumulative incidence-all-lt14 weeks-trt0.pdf", height = h, width = w)
+cum_incidence_primary(survivalds=subset(survival_loss_lt14, trt==0),
+                      ga_quo="<14 Weeks",
+                      trt_quo="Labetalol")
+dev.off()
+
+
+pdf("Cumulative incidence-all-ge14 weeks-trt0.pdf", height=h, width=w)
+cum_incidence_primary(survivalds=subset(survival_loss_ge14, trt==0),
+                      ga_quo=">=14 Weeks",
+                      trt_quo="Labetalol")
+dev.off()
+
+pdf("Cumulative incidence-all-lt14 weeks-trt1.pdf", height=h, width=w)
+cum_incidence_primary(survivalds=subset(survival_loss_lt14, trt==1),
+                      ga_quo="<14 Weeks",
+                      trt_quo="Nifedipine")
+dev.off()
+
+pdf("Cumulative incidence-all-ge14 weeks-trt1.pdf", height=h, width=w)
+cum_incidence_primary(survivalds=subset(survival_loss_ge14, trt==1),
+                      ga_quo=">=14 Weeks",
+                      trt_quo="Nifedipine")
+dev.off()
+
+
+
+
+
+```
+
+
+
+# Plot the sensitivity analyses for missingness
+
+### Function to pull together bounds data
+
+```{r}
+
+bounds_data <- function(outc_quo='loss', bound_quo='partialb'){
+  
+  # Point Estimates
+
+  both_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_' , 'both_', outc_quo, '_point_all.sas7bdat')) %>% 
+    mutate(assumption = "Both")
+
+  none_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_' , 'none_', outc_quo, '_point_all.sas7bdat')) %>% 
+    mutate(assumption = "None")
+
+  nif_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_' , 'nif_', outc_quo, '_point_all.sas7bdat')) %>% 
+    mutate(assumption = "Nifedipine")
+  
+  lab_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_' , 'lab_', outc_quo, '_point_all.sas7bdat')) %>% 
+    mutate(assumption = "Labetalol")
+  
+  est <- rbind(both_est, none_est) %>% 
+    rbind(nif_est) %>% 
+    rbind(lab_est)
+  
+  # Standard errors from bootstrap
+  
+  both_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_both_', outc_quo,'_boot_all.sas7bdat')) %>%   
+    mutate(assumption = "Both")
+  
+  none_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_none_', outc_quo,'_boot_all.sas7bdat')) %>%   
+    mutate(assumption = "None")
+  
+  nif_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_nif_', outc_quo,'_boot_all.sas7bdat')) %>%   
+    mutate(assumption = "Nifedipine")
+  
+  lab_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_lab_', outc_quo,'_boot_all.sas7bdat')) %>%   
+    mutate(assumption = "Labetalol")
+  
+  se <- rbind(both_se, none_se) %>% 
+    rbind(nif_se) %>% 
+    rbind(lab_se) %>% 
+    select(c(estimate, stderr, assumption)) %>% 
+    filter(estimate == 'rd' | estimate == 'rr') %>% 
+    pivot_wider(names_from = estimate, 
+                values_from = stderr, 
+                names_prefix = "se_")
+  
+  # Now, join them all together
+  
+  all <- left_join(est, se, by="assumption") 
+  
+  return(all)
+  
+}
+
+
+
+### Function to get partial bounds for loss -- Datasets were named differently from the others.
+
+pbounds_loss_data <- function(bound_quo='partialb'){
+  
+  # Point Estimates
+
+  both_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_overall_both.sas7bdat')) %>% 
+    mutate(assumption = "Both")
+
+  none_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_overall_none.sas7bdat')) %>% 
+    mutate(assumption = "None")
+
+  nif_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_overall_nif.sas7bdat')) %>% 
+    mutate(assumption = "Nifedipine")
+  
+  lab_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_overall_lab.sas7bdat')) %>% 
+    mutate(assumption = "Labetalol")
+  
+  est <- rbind(both_est, none_est) %>% 
+    rbind(nif_est) %>% 
+    rbind(lab_est)
+  
+  # Standard errors from bootstrap
+  
+  both_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_overall_both.sas7bdat')) %>%   
+    mutate(assumption = "Both")
+  
+  none_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_overall_none.sas7bdat')) %>%   
+    mutate(assumption = "None")
+  
+  nif_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_overall_nif.sas7bdat')) %>%   
+    mutate(assumption = "Nifedipine")
+  
+  lab_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_overall_lab.sas7bdat')) %>%   
+    mutate(assumption = "Labetalol")
+  
+  se <- rbind(both_se, none_se) %>% 
+    rbind(nif_se) %>% 
+    rbind(lab_se) %>% 
+    select(c(estimate, stderr, assumption)) %>% 
+    filter(estimate == 'rd' | estimate == 'rr') %>% 
+    pivot_wider(names_from = estimate, 
+                values_from = stderr, 
+                names_prefix = "se_")
+  
+  # Now, join them all together
+  
+  all <- left_join(est, se, by="assumption") 
+  
+  return(all)
+  
+}
+
+
+
+
+### Function to get partial bounds for ptb -- Datasets were named differently from the others.
+
+pbounds_ptb_data <- function(bound_quo='partialb'){
+  
+  # Point Estimates
+
+  both_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_both.sas7bdat')) %>% 
+    mutate(assumption = "Both")
+
+  none_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_none.sas7bdat')) %>% 
+    mutate(assumption = "None")
+
+  nif_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_nif.sas7bdat')) %>% 
+    mutate(assumption = "Nifedipine")
+  
+  lab_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_lab.sas7bdat')) %>% 
+    mutate(assumption = "Labetalol")
+  
+  est <- rbind(both_est, none_est) %>% 
+    rbind(nif_est) %>% 
+    rbind(lab_est)
+  
+  # Standard errors from bootstrap
+  
+  both_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_both.sas7bdat')) %>%   
+    mutate(assumption = "Both")
+  
+  none_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_none.sas7bdat')) %>%   
+    mutate(assumption = "None")
+  
+  nif_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_nif.sas7bdat')) %>%   
+    mutate(assumption = "Nifedipine")
+  
+  lab_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_lab.sas7bdat')) %>%   
+    mutate(assumption = "Labetalol")
+  
+  se <- rbind(both_se, none_se) %>% 
+    rbind(nif_se) %>% 
+    rbind(lab_se) %>% 
+    select(c(estimate, stderr, assumption)) %>% 
+    filter(estimate == 'rd' | estimate == 'rr') %>% 
+    pivot_wider(names_from = estimate, 
+                values_from = stderr, 
+                names_prefix = "se_")
+  
+  # Now, join them all together
+  
+  all <- left_join(est, se, by="assumption") 
+  
+  return(all)
+  
+}
+
+
+
+```
+
+## Function to Make Plots
+
+```{r}
+
+
+make_plot <- function(point_est, full_bounds, partial_bounds, outcome_quo){
+  
+  # Get the qnorm value for 95% confidence intervals
+  z <- qnorm(0.975, 0, 1)
+  
+  point_est_full <- point_est %>% 
+    mutate(
+      analysis = "Full Bounds",
+      sens = "Primary"
+    )
+  
+  point_est_partial <- point_est %>% 
+    mutate(
+      analysis = "Enrollment Bounds",
+      sens = "Primary"
+    )
+  
+  point_all <- rbind(point_est_full, point_est_partial)
+  
+  full_bounds$sens <- "Sensitivity"
+  partial_bounds$sens <- "Sensitivity"
+  
+  # Derive the confidence intervals for the effect estimates
+  estimates <- rbind(point_all, full_bounds) %>% 
+    rbind(partial_bounds) %>% 
+    mutate(
+      rd_lcl = 100*(rd - (z*se_rd)),
+      rd_ucl = 100*(rd + (z*se_rd)),
+      rd = 100*rd,
+      rr_lcl = exp(log(rr) - (z*se_rr)),
+      rr_ucl = exp(log(rr) + (z*se_rr))
+    )
+  
+  # # Make analysis a factor variable so that it prints in the desired order
+  # estimates$analysis <- factor(estimates$analysis, 
+  #                              levels = c("Primary", "Partial Bounds", "Full Bounds"))
+  
+  # Risk Difference Plot
+
+  rd <- ggplot(estimates, aes(x = rd, y = analysis, color=sens, shape=sens, group = assumption))+
+    geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
+    geom_errorbar(aes(xmin = rd_lcl, xmax = rd_ucl),
+                  position = ggstance::position_dodgev(height = 0.5),
+                  width = 0)+
+    theme(legend.position = "bottom") +
+    labs(
+        title = "Risk Differences", 
+        subtitle = paste0(outcome_quo),
+        x = "Risk Difference",  # Label for x-axis
+        y = "Sensitivity Analysis",  # Label for y-axis
+        color = "Analysis",
+        shape = "Analysis"
+    ) +
+    geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
+    # Labels with horizontal alignment shift
+    geom_text(aes(label = ifelse(assumption == "Primary", '', assumption)), 
+              size = 2.5, 
+              color = "black",
+              position = ggstance::position_dodgev(height = 0.5),
+              vjust = 1.7
+              ) +
+    theme_minimal() +
+    scale_x_continuous(limits = c(-15, 25)) +
+    theme(axis.text.y = element_text(angle = 45, hjust = 1, vjust = -1.5))
+  
+  
+  rr <- ggplot(estimates, aes(x = rr, y = analysis, color=sens, shape=sens, group = assumption))+
+    geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
+    geom_errorbar(aes(xmin = rr_lcl, xmax = rr_ucl),
+                  position = ggstance::position_dodgev(height = 0.5),
+                  width = 0)+
+    scale_x_continuous(trans = "log10", limits = c(0.2, 7)) +
+    theme(legend.position = "bottom") +
+    labs(
+        title = "Risk Ratios", 
+        subtitle = paste0(outcome_quo),
+        x = "Risk Ratio",  # Label for x-axis
+        y = "Sensitivity Analysis",  # Label for y-axis
+        color = "Analysis",
+        shape = "Analysis"
+    ) +
+    geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
+    # Labels with horizontal alignment shift
+    geom_text(aes(label = ifelse(assumption == "Primary", '', assumption)), 
+              size = 2.5, 
+              color = "black",
+              position = ggstance::position_dodgev(height = 0.5),
+              vjust = 1.7
+              ) +
+    theme_minimal() +
+    theme(axis.text.y = element_text(angle = 45, hjust = 1, vjust = -1.5))
+
+
+  return(list(
+    rd = rd,
+    rr = rr
+  ))
+  
+  
+}
+
+
+```
+
+## Pregnancy Loss
+
+```{r}
+
+# point Estimate
+
+primary_loss <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_overall.sas7bdat')
+
+# SE via bootstrap
+
+primary_loss_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_boot_overall.sas7bdat') %>% 
+  select(estimate, stderr) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_")
+
+# now join these together
+
+loss <- cbind(primary_loss, primary_loss_se) %>% 
+  mutate(
+    assumption = "Primary",
+    analysis = "Primary"
+  )
+
+## Get data for full Bounds
+
+full_loss <- bounds_data(outc_quo='loss',bound_quo='fullbounds') %>% 
+  mutate(analysis = "Full Bounds")
+
+## Get data for partial bounds
+
+partial_loss <- pbounds_loss_data(bound_quo='partialb') %>% 
+  mutate(analysis = "Enrollment Bounds")
+
+# Make the figures
+
+loss_figures <- make_plot(point_est = loss, 
+                          full_bounds = full_loss, 
+                          partial_bounds = partial_loss, 
+                          outcome_quo = "Pregancy Loss")
+
+# Now print and save the figures as PDFs
+
+h <- 4.5
+w <- 4.5
+
+pdf("RDs_bounds_loss.pdf", height=h, width=w)
+loss_figures[[1]]
+dev.off()
+
+pdf("RRs_bounds_loss.pdf", height=h, width=w)
+loss_figures[[2]]
+dev.off()
+
+```
+
+## Preterm Birth
+
+```{r}
+
+# point Estimate
+
+primary_ptb <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_ptb_overall.sas7bdat')
+
+# SE viai bootstrap
+
+primary_ptb_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_ptb_boot_overall.sas7bdat') %>% 
+  select(estimate, stderr) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_")
+
+# now join these together
+
+ptb <- cbind(primary_ptb, primary_ptb_se) %>% 
+  mutate(
+    assumption = "Primary",
+    analysis = "Primary"
+  )
+
+## Get data for full Bounds
+
+full_ptb <- bounds_data(outc_quo='ptb',bound_quo='fullbounds') %>% 
+  mutate(analysis = "Full Bounds")
+
+## Get data for partial bounds
+
+partial_ptb <- pbounds_ptb_data(bound_quo='partialb') %>% 
+  mutate(analysis = "Enrollment Bounds")
+
+# Make the figures
+
+ptb_figures <- make_plot(point_est = ptb, 
+                         full_bounds = full_ptb, 
+                         partial_bounds = partial_ptb, 
+                         outcome_quo = "Preterm Birth")
+
+# Now print and save the figures as PDFs
+
+h <- 4.5
+w <- 4.5
+
+
+pdf("RDs_bounds_ptb.pdf", height=h, width=w)
+ptb_figures[[1]]
+dev.off()
+
+pdf("RRs_bounds_ptb.pdf", height=h, width=w)
+ptb_figures[[2]]
+dev.off()
+
+```
+
+
