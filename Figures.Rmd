@@ -218,11 +218,12 @@ cum_incidence_primary <- function(survivaldsn, ga_quo, trt_quo){
   ylim(0, 1.01) + 
   scale_x_continuous(breaks = seq(0, 260, by = 50),
                      limits = c(0, 260)) +
-  scale_fill_viridis()+
-  # scale_color_manual(values = c("IAB" = "navy", "SAB" = "orange", "LB" = "grey"), 
-  #                    labels = c("IAB"="Induced Abortion", 
-  #                               "SAB" = "Pregnancy Loss", 
-  #                               "LB" = "Live birth")) +
+  scale_color_manual(values = c("Induced Abortion" = "#009E73", 
+                                "Pregnancy Loss" = "#0072B2", 
+                                "Live Birth" = "#D55E00")) +#,
+                     # labels = c("IAB"="Induced Abortion",
+                     #            "SAB" = "Pregnancy Loss",
+                     #            "LB" = "Live birth")) +
   theme_minimal(base_size = 11)+
   theme(legend.position = "bottom")
   
@@ -455,23 +456,27 @@ make_plot <- function(point_est, full_bounds, partial_bounds, outcome_quo){
   # Get the qnorm value for 95% confidence intervals
   z <- qnorm(0.975, 0, 1)
   
-  point_est_full <- point_est %>% 
+  point_all <- point_est %>% 
     mutate(
-      analysis = "Full Bounds",
-      sens = "Primary"
+      analysis = "Primary",
+      sens = "Primary",
     )
   
-  point_est_partial <- point_est %>% 
+  # Make a differential and non-differential version
+  full_bounds <- full_bounds %>% 
     mutate(
-      analysis = "Enrollment Bounds",
-      sens = "Primary"
+      sens = ifelse(assumption == "Both" | assumption == "None",
+                    "Non-Differential",
+                    "Differential")
     )
   
-  point_all <- rbind(point_est_full, point_est_partial)
-  
-  full_bounds$sens <- "Sensitivity"
-  partial_bounds$sens <- "Sensitivity"
-  
+  partial_bounds <- partial_bounds %>% 
+    mutate(
+      sens = ifelse(assumption == "Both" | assumption == "None",
+                    "Non-Differential",
+                    "Differential")
+    )
+
   # Derive the confidence intervals for the effect estimates
   estimates <- rbind(point_all, full_bounds) %>% 
     rbind(partial_bounds) %>% 
@@ -480,67 +485,87 @@ make_plot <- function(point_est, full_bounds, partial_bounds, outcome_quo){
       rd_ucl = 100*(rd + (z*se_rd)),
       rd = 100*rd,
       rr_lcl = exp(log(rr) - (z*se_rr)),
-      rr_ucl = exp(log(rr) + (z*se_rr))
+      rr_ucl = exp(log(rr) + (z*se_rr)),
+      assumption = ifelse(assumption == "None", "Neither", assumption)
     )
   
-  # # Make analysis a factor variable so that it prints in the desired order
-  # estimates$analysis <- factor(estimates$analysis, 
-  #                              levels = c("Primary", "Partial Bounds", "Full Bounds"))
+  # Make analysis a factor variable so that it prints in the desired order
+  estimates$sens <- factor(estimates$sens,
+                           levels = c("Non-Differential", "Differential", "Primary"))
   
+  estimates$assumption <- factor(estimates$assumption,
+                                 levels = c("Both", "Neither","Nifedipine", "Labetalol", "Primary"))
+  
+  estimates <- estimates %>% 
+    arrange(analysis, sens, assumption)
+
   # Risk Difference Plot
 
-  rd <- ggplot(estimates, aes(x = rd, y = analysis, color=sens, shape=sens, group = assumption))+
+  rd <- ggplot(estimates, aes(x = rd, y = analysis, color=sens, shape=assumption))+
     geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
     geom_errorbar(aes(xmin = rd_lcl, xmax = rd_ucl),
                   position = ggstance::position_dodgev(height = 0.5),
                   width = 0)+
-    theme(legend.position = "bottom") +
     labs(
-        title = "Risk Differences", 
-        subtitle = paste0(outcome_quo),
-        x = "Risk Difference",  # Label for x-axis
-        y = "Sensitivity Analysis",  # Label for y-axis
-        color = "Analysis",
-        shape = "Analysis"
+        title = paste0(outcome_quo),
+        x = "Risk Difference (per 100)",  # Label for x-axis
+        y = NULL,  # Label for y-axis
+        color = "Censoring Across\nTreatment",
+        shape = "Treatment Group\nAssumed to\nExperience\nthe Outcome"
     ) +
     geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
-    # Labels with horizontal alignment shift
-    geom_text(aes(label = ifelse(assumption == "Primary", '', assumption)), 
-              size = 2.5, 
-              color = "black",
-              position = ggstance::position_dodgev(height = 0.5),
-              vjust = 1.7
-              ) +
     theme_minimal() +
+    scale_color_manual(
+      values = c("Non-Differential" = "#D55E00",
+                 "Differential" = "#0072B2",
+                 "Primary" = "black"),
+      labels = c("Non-Differential", "Differential", "Primary")
+    ) +
+    scale_shape_manual(
+      values = c("Nifedipine"=15, "Labetalol"=17,"Both"=7, "Neither"=3,"Primary"=16)
+    ) +
     scale_x_continuous(limits = c(-15, 25)) +
-    theme(axis.text.y = element_text(angle = 45, hjust = 1, vjust = -1.5))
+    theme(
+      axis.text.y = element_text(color = "black", 
+                                 #face = "bold", 
+                                 angle = 90, 
+                                 vjust = 0.5, hjust = 0.5),
+      axis.ticks.y = element_blank()
+    )
   
   
-  rr <- ggplot(estimates, aes(x = rr, y = analysis, color=sens, shape=sens, group = assumption))+
+  
+  rr <- ggplot(estimates, aes(x = rr, y = analysis, color=sens, shape=assumption))+
     geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
     geom_errorbar(aes(xmin = rr_lcl, xmax = rr_ucl),
                   position = ggstance::position_dodgev(height = 0.5),
                   width = 0)+
     scale_x_continuous(trans = "log10", limits = c(0.2, 7)) +
-    theme(legend.position = "bottom") +
     labs(
-        title = "Risk Ratios", 
-        subtitle = paste0(outcome_quo),
-        x = "Risk Ratio",  # Label for x-axis
-        y = "Sensitivity Analysis",  # Label for y-axis
-        color = "Analysis",
-        shape = "Analysis"
+        title = paste0(outcome_quo),
+        x = "Risk Ratio (Log-Scaled)",  # Label for x-axis
+        y = NULL,  # Label for y-axis
+        color = "Censoring Across\nTreatment",
+        shape = "Treatment Group\nAssumed to\nExperience\nthe Outcome"
     ) +
     geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
-    # Labels with horizontal alignment shift
-    geom_text(aes(label = ifelse(assumption == "Primary", '', assumption)), 
-              size = 2.5, 
-              color = "black",
-              position = ggstance::position_dodgev(height = 0.5),
-              vjust = 1.7
-              ) +
     theme_minimal() +
-    theme(axis.text.y = element_text(angle = 45, hjust = 1, vjust = -1.5))
+    scale_color_manual(
+      values = c("Non-Differential" = "#D55E00",
+                 "Differential" = "#0072B2",
+                 "Primary" = "black"),
+      labels = c("Non-Differential", "Differential", "Primary")
+    ) +
+    scale_shape_manual(
+      values = c("Nifedipine"=15, "Labetalol"=17,"Both"=7, "Neither"=3,"Primary"=16)
+    ) +
+    theme(
+      axis.text.y = element_text(color = "black", 
+                                 #face = "bold", 
+                                 angle = 90, 
+                                 vjust = 0.5, hjust = 0.5),
+      axis.ticks.y = element_blank()
+    )
 
 
   return(list(
@@ -550,6 +575,262 @@ make_plot <- function(point_est, full_bounds, partial_bounds, outcome_quo){
   
   
 }
+
+
+
+
+
+
+
+make_plot2 <- function(point_est, full_bounds, partial_bounds, outcome_quo){
+  
+  # Get the qnorm value for 95% confidence intervals
+  z <- qnorm(0.975, 0, 1)
+  
+  point_all <- point_est %>% 
+    mutate(
+      analysis = "Primary",
+      sens = "Primary",
+    )
+  
+  # Make a differential and non-differential version
+  full_bounds <- full_bounds %>% 
+    mutate(
+      sens = ifelse(assumption == "Both" | assumption == "None",
+                    "Non-Differential",
+                    "Differential")
+    )
+  
+  partial_bounds <- partial_bounds %>% 
+    mutate(
+      sens = ifelse(assumption == "Both" | assumption == "None",
+                    "Non-Differential",
+                    "Differential")
+    )
+
+  # Derive the confidence intervals for the effect estimates
+  estimates <- rbind(point_all, full_bounds) %>% 
+    rbind(partial_bounds) %>% 
+    mutate(
+      rd_lcl = 100*(rd - (z*se_rd)),
+      rd_ucl = 100*(rd + (z*se_rd)),
+      rd = 100*rd,
+      rr_lcl = exp(log(rr) - (z*se_rr)),
+      rr_ucl = exp(log(rr) + (z*se_rr)),
+      assumption = ifelse(assumption == "None", "Neither", assumption)
+    )
+  
+  # Make analysis a factor variable so that it prints in the desired order
+  estimates$sens <- factor(estimates$sens,
+                           levels = c("Non-Differential", "Differential", "Primary"))
+  
+  estimates$assumption <- factor(estimates$assumption,
+                                 levels = c("Both", "Neither","Nifedipine", "Labetalol", "Primary"))
+  
+  estimates <- estimates %>% 
+    arrange(analysis, sens, assumption)
+  
+  # Create a combined variable in estimates
+  estimates$legend_group <- paste(estimates$sens, 
+                                  estimates$assumption, 
+                                  sep = " - ")
+
+
+  # Risk Difference Plot
+
+  rd <- ggplot(estimates, aes(x = rd, y = analysis, color=assumption, shape=assumption))+
+    geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
+    geom_errorbar(aes(xmin = rd_lcl, xmax = rd_ucl),
+                  position = ggstance::position_dodgev(height = 0.5),
+                  width = 0)+
+    labs(
+        title = paste0(outcome_quo),
+        x = "Risk Difference (per 100)",  # Label for x-axis
+        y = NULL,  # Label for y-axis
+        color = "Treatment Group\nAssumed to\nExperience\nthe Outcome",
+        shape = "Treatment Group\nAssumed to\nExperience\nthe Outcome"
+    ) +
+    geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
+    theme_minimal() +
+    scale_color_manual(
+      values = c(
+        "Both" = "#D55E00",
+        "Neither" = "#D55E00",
+        "Nifedipine" = "#0072B2",
+        "Labetalol" = "#0072B2",
+        "Primary" = "black"
+      )
+    ) +
+    scale_shape_manual(
+      values = c(
+        "Both" = 7,
+        "Neither" = 3,
+        "Nifedipine" = 15,
+        "Labetalol" = 17,
+        "Primary" = 16
+      )
+    ) +
+    scale_x_continuous(limits = c(-15, 25)) +
+    theme(
+      axis.text.y = element_text(color = "black", 
+                                 #face = "bold", 
+                                 angle = 90, 
+                                 vjust = 0.5, hjust = 0.5),
+      axis.ticks.y = element_blank()
+    )
+  
+  
+  
+  rr <- ggplot(estimates, aes(x = rr, y = analysis, color=assumption, shape=assumption))+
+    geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
+    geom_errorbar(aes(xmin = rr_lcl, xmax = rr_ucl),
+                  position = ggstance::position_dodgev(height = 0.5),
+                  width = 0)+
+    scale_x_continuous(trans = "log10", limits = c(0.2, 7)) +
+    labs(
+        title = paste0(outcome_quo),
+        x = "Risk Ratio (Log-Scaled)",  # Label for x-axis
+        y = NULL,  # Label for y-axis
+        color = "Treatment Group\nAssumed to\nExperience\nthe Outcome",
+        shape = "Treatment Group\nAssumed to\nExperience\nthe Outcome"
+    ) +
+    geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
+    theme_minimal() +
+    scale_color_manual(
+      values = c(
+        "Both" = "#D55E00",
+        "Neither" = "#D55E00",
+        "Nifedipine" = "#0072B2",
+        "Labetalol" = "#0072B2",
+        "Primary" = "black"
+      )
+    ) +
+    scale_shape_manual(
+      values = c(
+        "Both" = 7,
+        "Neither" = 3,
+        "Nifedipine" = 15,
+        "Labetalol" = 17,
+        "Primary" = 16
+      )
+    ) +
+    theme(
+      axis.text.y = element_text(color = "black", 
+                                 #face = "bold", 
+                                 angle = 90, 
+                                 vjust = 0.5, hjust = 0.5),
+      axis.ticks.y = element_blank()
+    )
+
+
+  return(list(
+    rd = rd,
+    rr = rr
+  ))
+  
+  
+}
+
+# make_plot <- function(point_est, full_bounds, partial_bounds, outcome_quo){
+#   
+#   # Get the qnorm value for 95% confidence intervals
+#   z <- qnorm(0.975, 0, 1)
+#   
+#   point_est_full <- point_est %>% 
+#     mutate(
+#       analysis = "Full Bounds",
+#       sens = "Primary"
+#     )
+#   
+#   point_est_partial <- point_est %>% 
+#     mutate(
+#       analysis = "Enrollment Bounds",
+#       sens = "Primary"
+#     )
+#   
+#   point_all <- rbind(point_est_full, point_est_partial)
+#   
+#   full_bounds$sens <- "Sensitivity"
+#   partial_bounds$sens <- "Sensitivity"
+#   
+#   # Derive the confidence intervals for the effect estimates
+#   estimates <- rbind(point_all, full_bounds) %>% 
+#     rbind(partial_bounds) %>% 
+#     mutate(
+#       rd_lcl = 100*(rd - (z*se_rd)),
+#       rd_ucl = 100*(rd + (z*se_rd)),
+#       rd = 100*rd,
+#       rr_lcl = exp(log(rr) - (z*se_rr)),
+#       rr_ucl = exp(log(rr) + (z*se_rr))
+#     )
+#   
+#   # # Make analysis a factor variable so that it prints in the desired order
+#   # estimates$analysis <- factor(estimates$analysis, 
+#   #                              levels = c("Primary", "Partial Bounds", "Full Bounds"))
+#   
+#   # Risk Difference Plot
+# 
+#   rd <- ggplot(estimates, aes(x = rd, y = analysis, color=sens, shape=sens, group = assumption))+
+#     geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
+#     geom_errorbar(aes(xmin = rd_lcl, xmax = rd_ucl),
+#                   position = ggstance::position_dodgev(height = 0.5),
+#                   width = 0)+
+#     theme(legend.position = "bottom") +
+#     labs(
+#         title = "Risk Differences", 
+#         subtitle = paste0(outcome_quo),
+#         x = "Risk Difference",  # Label for x-axis
+#         y = "Sensitivity Analysis",  # Label for y-axis
+#         color = "Analysis",
+#         shape = "Analysis"
+#     ) +
+#     geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
+#     # Labels with horizontal alignment shift
+#     geom_text(aes(label = ifelse(assumption == "Primary", '', assumption)), 
+#               size = 2.5, 
+#               color = "black",
+#               position = ggstance::position_dodgev(height = 0.5),
+#               vjust = 1.7
+#               ) +
+#     theme_minimal() +
+#     scale_x_continuous(limits = c(-15, 25)) +
+#     theme(axis.text.y = element_text(angle = 45, hjust = 1, vjust = -1.5))
+#   
+#   
+#   rr <- ggplot(estimates, aes(x = rr, y = analysis, color=sens, shape=sens, group = assumption))+
+#     geom_point(size=2, position = ggstance::position_dodgev(height = 0.5)) + 
+#     geom_errorbar(aes(xmin = rr_lcl, xmax = rr_ucl),
+#                   position = ggstance::position_dodgev(height = 0.5),
+#                   width = 0)+
+#     scale_x_continuous(trans = "log10", limits = c(0.2, 7)) +
+#     theme(legend.position = "bottom") +
+#     labs(
+#         title = "Risk Ratios", 
+#         subtitle = paste0(outcome_quo),
+#         x = "Risk Ratio",  # Label for x-axis
+#         y = "Sensitivity Analysis",  # Label for y-axis
+#         color = "Analysis",
+#         shape = "Analysis"
+#     ) +
+#     geom_vline(xintercept = 1, linetype = "dashed", linewidth = 0.8, color = "darkgrey") +
+#     # Labels with horizontal alignment shift
+#     geom_text(aes(label = ifelse(assumption == "Primary", '', assumption)), 
+#               size = 2.5, 
+#               color = "black",
+#               position = ggstance::position_dodgev(height = 0.5),
+#               vjust = 1.7
+#               ) +
+#     theme_minimal() +
+#     theme(axis.text.y = element_text(angle = 45, hjust = 1, vjust = -1.5))
+# 
+# 
+#   return(list(
+#     rd = rd,
+#     rr = rr
+#   ))
+#   
+#   
+# }
 
 
 ```
@@ -609,6 +890,28 @@ pdf("RRs_bounds_loss.pdf", height=h, width=w)
 loss_figures[[2]]
 dev.off()
 
+
+
+
+
+loss_figures2 <- make_plot2(point_est = loss, 
+                          full_bounds = full_loss, 
+                          partial_bounds = partial_loss, 
+                          outcome_quo = "Pregancy Loss")
+
+# Now print and save the figures as PDFs
+
+h <- 4.5
+w <- 4.5
+
+pdf("RDs_bounds_loss2.pdf", height=h, width=w)
+loss_figures2[[1]]
+dev.off()
+
+pdf("RRs_bounds_loss2.pdf", height=h, width=w)
+loss_figures2[[2]]
+dev.off()
+
 ```
 
 ## Preterm Birth
@@ -648,7 +951,7 @@ partial_ptb <- pbounds_ptb_data(bound_quo='partialb') %>%
 
 # Make the figures
 
-ptb_figures <- make_plot(point_est = ptb, 
+ptb_figures2 <- make_plot2(point_est = ptb, 
                          full_bounds = full_ptb, 
                          partial_bounds = partial_ptb, 
                          outcome_quo = "Preterm Birth")
@@ -659,13 +962,18 @@ h <- 4.5
 w <- 4.5
 
 
-pdf("RDs_bounds_ptb.pdf", height=h, width=w)
-ptb_figures[[1]]
+pdf("RDs_bounds_ptb2.pdf", height=h, width=w)
+ptb_figures2[[1]]
 dev.off()
 
-pdf("RRs_bounds_ptb.pdf", height=h, width=w)
-ptb_figures[[2]]
+pdf("RRs_bounds_ptb2.pdf", height=h, width=w)
+ptb_figures2[[2]]
 dev.off()
+
+
+
+
+# Make second set of figures with combined legend
 
 ```
 
