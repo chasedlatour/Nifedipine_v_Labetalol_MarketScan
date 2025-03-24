@@ -68,7 +68,9 @@ cum_incidence_primary <- function(survivaldsn, outcome_quo, ga_quo){
   scale_color_manual(values = c("0" = "navy", "1" = "orange"), 
                      labels = c("Labetalol", "Nifedipine")) +
   theme_minimal(base_size = 12)+
-  theme(legend.position = "bottom")
+  theme(legend.position = c(0.25, 0.8),
+        legend.background = element_rect(fill = "white", color = "white"))
+  # theme(legend.position = "bottom")
   
   
 }
