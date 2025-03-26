@@ -1156,5 +1156,53 @@ run;
 
 
 
+******
+	Explore how many preterm births have ptb codes;
 
+data ptb;
+set ana.primary_cohort;
+run;
+
+*Merge the gestational age codes onto the pregnancies;
+proc sql;
+	create table ptb_ga as
+	select a.*, b.code, b.code_type, b.description, b.preg_outcome, b.code_hierarchy, b.gestational_age_days
+	from ptb as a
+	left join temp.gestage as b
+	on a.patient_deid=b.patient_deid and a.dt_gapreg-7 <= b.enc_date <= a.dt_gapreg+7
+	;
+	quit;
+
+*Assign a hierarchy based on our algorithms hierarchy;
+
+proc sql;
+	create table ptb_ga2 as
+	select distinct enrolid, idxpren, dt_lmp, dt_gapreg, dt_indexprenatal, preg_outcome_ptb, 
+			min(case when code_hierarchy = "Specific gestational age" then 1
+					when code_hierarchy = "Extreme prematurity" then 2
+					when code_hierarchy = "Other preterm" then 3
+					else 9 end) as hierarchy,
+			max(case when code_hierarchy in ("Extreme prematurity", "Other preterm") then 1 else 0 end) as preterm
+	from ptb_ga
+	group by idxpren
+	;
+	quit;
+
+proc freq data=ptb_ga2 (where = ( preg_outcome_ptb = "PTB"));
+	table hierarchy preterm / missing;
+run;
+
+*Look at the gestational ages represented by specific GA codes for preterm births;
+data ptb_ga3;
+set ptb_ga;
+	where preg_outcome_ptb = "PTB" and code_hierarchy = "Specific gestational age";
+
+	gest_age_weeks = gestational_age_days / 7;
+run;
+
+
+proc means data=ptb_ga3 min p10 p25 p50 p75 p90 max;
+	var gest_age_weeks;
+run;
+	
 

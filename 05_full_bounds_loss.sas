@@ -56,7 +56,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=05_full_bounds_loss, savelog=N);
+%setup(sample=full, programname=05_full_bounds_loss, savelog=Y);
 
 
 ******************************************************************************************************************************************;

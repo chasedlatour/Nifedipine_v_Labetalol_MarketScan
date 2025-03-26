@@ -1,5 +1,5 @@
 /********************************************************************************************************************************************
-PROGRAM: 13_sens_lmp_minus3w.sas
+PROGRAM: 13_sens_lmp_plus3w.sas
 PROGRAMMER: Chase Latour
 PURPOSE: The purpose of this program is to run the sensitivity analysis where we restrict to individuals with index dates after January 1, 2019.
 	
@@ -102,8 +102,31 @@ run;
 
 ********************************************************************************************************************************************/
 
+
+
+%*Create the cohort like we did the primary cohort -- implement relevant inclusion and exclusion criteria.;
+
+%implement_exclusions(inds=ana.preg_covar_63_dt_index_270_p21, outds=ana.sens_lmpp21_cohort);
+
+
+
+*Get the distribution by treatment;
+proc freq data=ana.sens_lmpp21_cohort;
+	table trt / missing;
+run;
+
+proc freq data=ana.sens_lmpp21_cohort (where = (ga_at_index < 98));
+	table trt / missing;
+run;
+
+proc freq data=ana.sens_lmpp21_cohort (where = (ga_at_index >= 98));
+	table trt / missing;
+run;
+
+*Now, conduct the analyses;
+
 %repeat_in_subset(
-	inds=ana.preg_covar_63_dt_index_270_p21,
+	inds=ana.sens_lmpp21_cohort,
 	sens=lmpp21,
 	where=NA,
 	numboot=1000

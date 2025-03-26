@@ -52,7 +52,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=12_sens_chtn, savelog=N);
+%setup(sample=full, programname=12_sens_chtn, savelog=Y);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/

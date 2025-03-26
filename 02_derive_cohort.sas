@@ -44,7 +44,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=02_derive_cohort, savelog=N);
+%setup(sample=full, programname=02_derive_cohort, savelog=Y);
 
 
 

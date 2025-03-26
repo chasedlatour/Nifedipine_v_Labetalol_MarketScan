@@ -104,6 +104,7 @@ run;
 
 ********************************************************************************************************************************************/
 
+*Subset to complete cases where pregnancy outcome is unknown;
 data cca;
 set ana.primary_cohort;
 	where preg_outcome_clean ne 'UNK';
@@ -112,20 +113,36 @@ set ana.primary_cohort;
 	if preg_outcome_clean in ('SAB' 'UAB' 'IAB') then loss = 1;
 		else loss = 0;
 
-	*Create a dichotmous variable for preterm birth prior to 37 weeks gestation;
-	if preg_outcome_clean in ('LBS' 'LBM' 'UDL') and dt_gapreg - dt_lmp < 259 then preterm = 1;
-		else preterm = 0;
 run;
 
 *Check for any unexpected missingness;
 proc freq data=cca;
-	table loss preterm / missing;
+	table loss / missing;
 run;
 
 proc freq data=cca;
 	table trt / missing;
 run;
 
+*Subset to complete cases where preterm birth outcome is unknown;
+data cca_ptb;
+set ana.primary_cohort;
+	where preg_outcome_ptb ne "UNK";
+
+	*Create a dichotmous variable for preterm birth prior to 37 weeks gestation;
+	if preg_outcome_ptb = "PTB" then preterm = 1;
+		else preterm = 0;
+
+run;
+
+*Check for any unexpected missingness;
+proc freq data=cca_ptb;
+	table preterm / missing;
+run;
+
+proc freq data=cca_ptb;
+	table trt / missing;
+run;
 
 
 		
@@ -136,91 +153,91 @@ run;
 
 ********************************************************************************************************************************************/
 
-*First, get the point estimate;
-%full_fup_weights(
-	boot = 0,
-	inds = cca,
-	gacatvar = ga_index_cat,
-	outcomevar = loss,
-	psvars=ga_quartile age_at_index age_at_index_2
-					year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-					year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
-					nausea_pre recurlos_pre obesity_post chronichypertension_pre
-					depressi_post anxiety_post antideprx_post benzorx_post 
-					teratrx_pre num_outptpnc num_outptpnc_2,
-	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-					nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-					depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre,
-	trtvar = trt,
-	numiterations=1,
-	initialseed=23244,
-	outds=ana.cca_loss_point,
-	outds_dist=ga_cca_loss_point
-);
-
-*Second, run the bootstrap to get standard error;
-%full_fup_weights(
-	boot = 1,
-	inds = cca,
-	gacatvar = ga_index_cat,
-	outcomevar = loss,
-	psvars=ga_quartile age_at_index age_at_index_2
-					year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-					year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
-					nausea_pre recurlos_pre obesity_post chronichypertension_pre
-					depressi_post anxiety_post antideprx_post benzorx_post 
-					teratrx_pre num_outptpnc num_outptpnc_2,
-	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-					nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-					depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre,
-	trtvar = trt,
-	numiterations=1000,
-	initialseed=23244,
-	outds=ana.cca_loss_boot,
-	outds_dist=ga_cca_loss_boot
-);
-
-options mlogic mprint symbolgen notes;
-
-*Combine the point estimates;
-%combine_point_estimates(
-	gadist=ana.ga_cca_loss_point,
-	numgastrat=2,
-	est=ana.cca_loss_point_,
-	outds=cca_loss_point_overall
-);
-
-*Combine all the bootstrapped estimates;
-%combine_boot_estimates(
-	inputEst=ana.cca_loss_boot,
-	inputDist=ana.ga_cca_loss_boot,
-	numStrata=2,
-	output_stratified=cca_loss_boot_strat,
-	output_overall=cca_loss_boot_overall
-);
-
-*Stratified estimates with confidence intervals;
-%strat_estimates_w_ci(
-	bootdsn=ana.cca_loss_boot_1,
-	pointdsn=ana.cca_loss_point_1,
-	output=ana.cca_loss_1_ci
-);
-%strat_estimates_w_ci(
-	bootdsn=ana.cca_loss_boot_2,
-	pointdsn=ana.cca_loss_point_2,
-	output=ana.cca_loss_2_ci
-);
-
-*overall estiamte with confidence interval;
-%overall_estimates_w_ci(
-	stderrdsn=cca_loss_boot_overall,
-	pointdsn=cca_loss_point_overall,
-	output=ana.cca_loss_all_ci
-);
-
-
-
-%count_missing_zero(inds1=ana.cca_loss_boot_1, inds2=ana.cca_loss_boot_2);
+/**First, get the point estimate;*/
+/*%full_fup_weights(*/
+/*	boot = 0,*/
+/*	inds = cca,*/
+/*	gacatvar = ga_index_cat,*/
+/*	outcomevar = loss,*/
+/*	psvars=ga_quartile age_at_index age_at_index_2*/
+/*					year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp*/
+/*					year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post*/
+/*					nausea_pre recurlos_pre obesity_post chronichypertension_pre*/
+/*					depressi_post anxiety_post antideprx_post benzorx_post */
+/*					teratrx_pre num_outptpnc num_outptpnc_2,*/
+/*	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp*/
+/*					nausea_pre recurlos_pre obesity_post chronichypertension_pre */
+/*					depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre,*/
+/*	trtvar = trt,*/
+/*	numiterations=1,*/
+/*	initialseed=23244,*/
+/*	outds=ana.cca_loss_point,*/
+/*	outds_dist=ga_cca_loss_point*/
+/*);*/
+/**/
+/**Second, run the bootstrap to get standard error;*/
+/*%full_fup_weights(*/
+/*	boot = 1,*/
+/*	inds = cca,*/
+/*	gacatvar = ga_index_cat,*/
+/*	outcomevar = loss,*/
+/*	psvars=ga_quartile age_at_index age_at_index_2*/
+/*					year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp*/
+/*					year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post*/
+/*					nausea_pre recurlos_pre obesity_post chronichypertension_pre*/
+/*					depressi_post anxiety_post antideprx_post benzorx_post */
+/*					teratrx_pre num_outptpnc num_outptpnc_2,*/
+/*	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp*/
+/*					nausea_pre recurlos_pre obesity_post chronichypertension_pre */
+/*					depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre,*/
+/*	trtvar = trt,*/
+/*	numiterations=1000,*/
+/*	initialseed=23244,*/
+/*	outds=ana.cca_loss_boot,*/
+/*	outds_dist=ga_cca_loss_boot*/
+/*);*/
+/**/
+/*options mlogic mprint symbolgen notes;*/
+/**/
+/**Combine the point estimates;*/
+/*%combine_point_estimates(*/
+/*	gadist=ana.ga_cca_loss_point,*/
+/*	numgastrat=2,*/
+/*	est=ana.cca_loss_point_,*/
+/*	outds=cca_loss_point_overall*/
+/*);*/
+/**/
+/**Combine all the bootstrapped estimates;*/
+/*%combine_boot_estimates(*/
+/*	inputEst=ana.cca_loss_boot,*/
+/*	inputDist=ana.ga_cca_loss_boot,*/
+/*	numStrata=2,*/
+/*	output_stratified=cca_loss_boot_strat,*/
+/*	output_overall=cca_loss_boot_overall*/
+/*);*/
+/**/
+/**Stratified estimates with confidence intervals;*/
+/*%strat_estimates_w_ci(*/
+/*	bootdsn=ana.cca_loss_boot_1,*/
+/*	pointdsn=ana.cca_loss_point_1,*/
+/*	output=ana.cca_loss_1_ci*/
+/*);*/
+/*%strat_estimates_w_ci(*/
+/*	bootdsn=ana.cca_loss_boot_2,*/
+/*	pointdsn=ana.cca_loss_point_2,*/
+/*	output=ana.cca_loss_2_ci*/
+/*);*/
+/**/
+/**overall estiamte with confidence interval;*/
+/*%overall_estimates_w_ci(*/
+/*	stderrdsn=cca_loss_boot_overall,*/
+/*	pointdsn=cca_loss_point_overall,*/
+/*	output=ana.cca_loss_all_ci*/
+/*);*/
+/**/
+/**/
+/**/
+/*%count_missing_zero(inds1=ana.cca_loss_boot_1, inds2=ana.cca_loss_boot_2);*/
 
 
 
@@ -240,7 +257,7 @@ options mlogic mprint symbolgen notes;
 *First, get the point estimate;
 %full_fup_weights(
 	boot = 0,
-	inds = cca,
+	inds = cca_ptb,
 	gacatvar = ga_index_cat,
 	outcomevar = preterm,
 	psvars=ga_quartile age_at_index age_at_index_2
@@ -262,7 +279,7 @@ options mlogic mprint symbolgen notes;
 *Second, run the bootstrap to get standard error;
 %full_fup_weights(
 	boot = 1,
-	inds = cca,
+	inds = cca_ptb,
 	gacatvar = ga_index_cat,
 	outcomevar = preterm,
 	psvars=ga_quartile age_at_index age_at_index_2

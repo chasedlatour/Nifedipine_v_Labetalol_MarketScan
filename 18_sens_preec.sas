@@ -1,8 +1,8 @@
 /********************************************************************************************************************************************
-PROGRAM: 08_sens_6gwAtPNC.sas
+PROGRAM: 18_sens_preec.sas
 PROGRAMMER: Chase Latour
-PURPOSE: The purpose of this program is to run the sensitivity analysis where we assume that the gestational age of pregnancies with UNK
-outcomes and no GA information was 6 weeks at the indexing prenatal encounter.
+PURPOSE: The purpose of this program is to run the sensitivity analysis where we restrict to individuals with a preeclampsia
+diagnosis code.
 	
 Goal: 
 Output data: 
@@ -11,7 +11,7 @@ Date: 12.19.2024
 ********************************************************************************************************************************************/
 
 
-
+	
 
 
 
@@ -52,7 +52,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=08_sens_6gwatpnc, savelog=Y);
+%setup(sample=full, programname=18_sens_preec, savelog=Y);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/
@@ -103,35 +103,12 @@ run;
 
 ********************************************************************************************************************************************/
 
-
-%*Create the cohort like we did the primary cohort -- implement relevant inclusion and exclusion criteria.;
-
-%implement_exclusions(inds=ana.preg_covar_42_dt_index_270, outds=ana.sens_42_cohort);
-
-*Get the distribution by treatment;
-proc freq data=ana.sens_42_cohort;
-	table trt / missing;
-run;
-
-proc freq data=ana.sens_42_cohort (where = (ga_at_index < 98));
-	table trt / missing;
-run;
-
-proc freq data=ana.sens_42_cohort (where = (ga_at_index >= 98));
-	table trt / missing;
-run;
-
-*Now, conduct the analyses;
-
 %repeat_in_subset(
-	inds=ana.sens_42_cohort,
-	sens=sens6w,
-	where=NA,
+	inds=ana.preg_covar_63_dt_index_270,
+	sens=preec,
+	where=preeclampsia_pre = 0,
 	numboot=1000
 );
 
-
-%count_missing_zero(inds1=ana.sens6w_boot_1, inds2=ana.sens6w_boot_2);
-
-%count_missing_zero(inds1=ana.sens6w_boot_ptb_1, inds2=ana.sens6w_boot_ptb_2);
-
+%count_missing_zero(inds1=ana.preec_boot_1, inds2=ana.preec_boot_2);
+%count_missing_zero(inds1=ana.preec_boot_ptb_1, inds2=ana.preec_boot_ptb_2);

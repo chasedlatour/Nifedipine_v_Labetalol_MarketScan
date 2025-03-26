@@ -1631,11 +1631,30 @@ age at which someone enters the dataset. Here, we consider two assumptions: 6*7 
 		dt_indexprenatal_orig = dt_indexprenatal;
 		dt_gapreg_orig = dt_gapreg;
 	run;
+
 		
 	/*Some pregnancies with unknown outcomes have too long of gestational lengths, which we define as
 	> 43w6d or 307 days.*/
 	%revise_too_long(_pregnancies2, _toolong, &lmpindex, days=307, round=0);
 	/*Output; _toolong*/ 
+
+	data test;
+	set _toolong;
+		where . < dt_indexprenatal < dt_lmp + 28;
+	run;
+
+	proc freq data=test;
+	table preg_outcome_clean/missing;
+	run;
+
+	data test2;
+	set test;
+		where LMP_AlgBased = 0 and preg_outcome_clean ne "UNK";
+	run;
+
+	proc freq data=test2;
+		table preg_outcome_clean / missing;
+	run;
 
 	/*Some pregnancies have their indexing prenatal encounter prior to their LMP or too early in gestation (we define as 28 days). 
 	We will revise these pregnancies.*/
@@ -1647,8 +1666,7 @@ age at which someone enters the dataset. Here, we consider two assumptions: 6*7 
 
 	*Output the final pregnancy cohort. Subset to those pregnancies with
 	LMPs within the relevant window;
-/*	data ana.preg_cohort_&lmpindex;*/
-	data preg_cohort_&lmpindex;
+	data ana.preg_cohort_&lmpindex;
 	set _pregnancies_clean; 
 		format dt_LMP date9.;
 		if '01JUL2016'd <= dt_LMP <= '01FEB2022'd;
@@ -1670,11 +1688,10 @@ age at which someone enters the dataset. Here, we consider two assumptions: 6*7 
 
 
 *Now run this for two different LMPs at index;
-/*%reassign_lmps(63);*/
-/*%reassign_lmps(42);*/
-/*%reassign_lmps(84);*/
+%reassign_lmps(63);
+%reassign_lmps(42);
+%reassign_lmps(84);
 
-*CDL: 2.5.2025 -- Commented out so that would not accidentally re-run;
 
 
 
@@ -1764,7 +1781,6 @@ PURPOSE: To revise the LMPs for those pregnancies where the LMP was revised base
 %mend;
 
 
-%reassign_lmps_range(lmpindex=63, revision=- 21,suffix=m21);
-
-%reassign_lmps_range(lmpindex=63, revision=+ 21, suffix=p21);
+/*%reassign_lmps_range(lmpindex=63, revision=- 21,suffix=m21);*/
+/*%reassign_lmps_range(lmpindex=63, revision=+ 21, suffix=p21);*/
 

@@ -52,7 +52,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=03_derive_covariates, savelog=Y);
+%setup(sample=full, programname=03_derive_covariates, savelog=N);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/
