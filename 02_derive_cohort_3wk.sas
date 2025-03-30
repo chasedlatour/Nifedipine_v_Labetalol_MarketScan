@@ -2844,14 +2844,14 @@ LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt 
 ************************************************************************************************************/
 
 %********Subtract 21 days (3 weeks) from original LMP;
-%derive_initial_cohort(lmpindex = 63, maxfill = 258, suffix=m21); *maxfill = 36*7+6 or 36w6d;
-%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270, suffix=m21);
-%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270, suffix=m21);
+/*%derive_initial_cohort(lmpindex = 63, maxfill = 258, suffix=m21); *maxfill = 36*7+6 or 36w6d;*/
+/*%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270, suffix=m21);*/
+/*%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270, suffix=m21);*/
 %get_allcovariates(lmpindex=63, lookbackdt = dt_index, lookbackdays=270, suffix=m21);
 
 %******Add 21 days (3 weeks) to original LMP;
-%derive_initial_cohort(lmpindex = 63, maxfill = 258, suffix=p21); *maxfill = 36*7+6 or 36w6d;
-%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270, suffix=p21);
-%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270, suffix=p21);
+/*%derive_initial_cohort(lmpindex = 63, maxfill = 258, suffix=p21); *maxfill = 36*7+6 or 36w6d;*/
+/*%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270, suffix=p21);*/
+/*%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270, suffix=p21);*/
 %get_allcovariates(lmpindex=63, lookbackdt = dt_index, lookbackdays=270, suffix=p21);
 

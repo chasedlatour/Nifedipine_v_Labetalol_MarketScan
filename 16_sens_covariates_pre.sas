@@ -181,7 +181,6 @@ run;
 	cr2='LBM' 'LBS' 'UDL',
 	psvars=/*ga_quartile_pre*/ ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre
-			/*year_index2017*t2dmrx_pre diabetes_simp_pre*t2dmrx_pre */
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -289,7 +288,6 @@ run;
 	cr2='LBM' 'LBS' 'UDL',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre
-/*			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post*/
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -297,8 +295,7 @@ run;
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre depressi_pre anxiety_pre antideprx_pre 
 			benzorx_pre teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre /*year_index4*t2dmrx_pre*/
-			/*diabetes_simp_pre*t2dmrx_pre*/
+			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre 
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
@@ -342,7 +339,6 @@ those in the treated group;
 	cr2='LBM' 'LBS' 'UDL',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre
-/*			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post*/
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -350,8 +346,7 @@ those in the treated group;
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre depressi_pre anxiety_pre antideprx_pre 
 			benzorx_pre teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre /*year_index4*t2dmrx_pre*/
-			/*diabetes_simp_pre*t2dmrx_pre*/
+			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre 
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
@@ -430,7 +425,6 @@ options mlogic mprint symbolgen notes;
 	cr3='TB',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre
-/*			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post*/
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -438,8 +432,7 @@ options mlogic mprint symbolgen notes;
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre depressi_pre anxiety_pre antideprx_pre 
 			benzorx_pre teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre /*year_index4*t2dmrx_pre*/
-			/*diabetes_simp_pre*t2dmrx_pre*/
+			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre 
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre 
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
@@ -483,7 +476,6 @@ those in the treated group;
 	cr3='TB',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre
-/*			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post*/
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -491,8 +483,7 @@ those in the treated group;
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre depressi_pre anxiety_pre antideprx_pre 
 			benzorx_pre teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre /*year_index4*t2dmrx_pre*/
-			/*diabetes_simp_pre*t2dmrx_pre*/
+			t2dmrx_pre t1t2dmrx_pre metforrx_pre diabetes_simp_pre 
 			nausea_pre recurlos_pre obesity_pre chronichypertension_pre 
 			depressi_pre anxiety_pre antideprx_pre benzorx_pre
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,

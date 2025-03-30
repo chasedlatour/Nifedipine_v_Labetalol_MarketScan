@@ -106,25 +106,25 @@ run;
 
 %*Create the cohort like we did the primary cohort -- implement relevant inclusion and exclusion criteria.;
 
-%implement_exclusions(inds=ana.preg_covar_42_dt_index_270, outds=ana.sens_42_cohort);
+%implement_exclusions(inds=ana.preg_covar_42_dt_index_270, outds=sens_42_cohort);
 
 *Get the distribution by treatment;
-proc freq data=ana.sens_42_cohort;
+proc freq data=sens_42_cohort;
 	table trt / missing;
 run;
 
-proc freq data=ana.sens_42_cohort (where = (ga_at_index < 98));
+proc freq data=sens_42_cohort (where = (ga_at_index < 98));
 	table trt / missing;
 run;
 
-proc freq data=ana.sens_42_cohort (where = (ga_at_index >= 98));
+proc freq data=sens_42_cohort (where = (ga_at_index >= 98));
 	table trt / missing;
 run;
 
 *Now, conduct the analyses;
 
 %repeat_in_subset(
-	inds=ana.sens_42_cohort,
+	inds=ana.preg_covar_42_dt_index_270,
 	sens=sens6w,
 	where=NA,
 	numboot=1000

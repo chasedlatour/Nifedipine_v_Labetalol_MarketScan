@@ -857,9 +857,9 @@ LMPINDEX - Assumed GA at the indexing prenatal encounter
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=63, SUFFIX=NA);
 %identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=63, SUFFIX=NA);
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=42, SUFFIX=NA);
-%identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=42, SUFFIX=NA);
+/*%identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=42, SUFFIX=NA);*/
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=84, SUFFIX=NA);
-%identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=84, SUFFIX=NA);
+/*%identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=84, SUFFIX=NA);*/
 
 %*Applying the 3-week window around the LMP;
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=63, SUFFIX=m21);

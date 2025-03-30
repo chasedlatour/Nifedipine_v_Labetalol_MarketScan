@@ -1,12 +1,12 @@
 /********************************************************************************************************************************************
-PROGRAM: 17_sens_udl.sas
+PROGRAM: 20_preec_outcome.sas
 PROGRAMMER: Chase Latour
-PURPOSE: To conduct a sensitivity analysis where we assume that uncategorized deliveries (UDLs) are stillbirths (SBs).
+PURPOSE: Conduct post-hoc analysis where preeclampsia (up to 2 weeks post-pregnancy outcome) is the study outcome
 	
 Goal: 
 Output data: 
 
-Date: 12.19.2024
+Date: 3.29.25
 ********************************************************************************************************************************************/
 
 
@@ -18,8 +18,11 @@ Date: 12.19.2024
 
 TABLE OF CONTENTS:
 	- 00 - SET UP LIBRARIES
-	- 01 - CONDUCT PREGNANCY LOSS ANALYSIS
-	- 02 - CONDUCT PRETERM BIRTH ANALYSIS
+	- 01 - IMPLEMENT EXCLUSION CRITERIA AND GET RELEVANT COUNTS
+	- 02 - INVESTIGATE COVARIATE DISTRIBUTIONS
+	- 03 - CONDUCT PREGNANCY LOSS ANALYSIS
+	- 04 - CONDUCT PRETERM BIRTH ANALYSIS
+	- 05 - AD-HOC DESCRIPTIVES
 
 ********************************************************************************************************************************************/
 
@@ -52,7 +55,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=17_sens_udl, savelog=Y);
+%setup(sample=full, programname=20_preec_outcome, savelog=Y);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/
@@ -60,6 +63,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*libname lana slibref=ana server=server;*/
 /*libname lwork slibref=work server=server;*/
 /*libname ltemp slibref=temp server=server;*/
+/*libname lexpref slibref=expref server=server;*/
 
 
 *Create formats;
@@ -96,175 +100,110 @@ proc format;
 run;
 
 
-	
-	
-/********************************************************************************************************************************************
-
-														03 - CONDUCT PREGNANCY LOSS ANALYSIS
-
-********************************************************************************************************************************************/
-
-*Use ana.primary_cohort as the base dataset;
-
-*********Get point estimates;
-	
-*Now incorporate the IPCW;
-%competing2risk_weights(
-	boot=0, 
-	inds=ana.primary_cohort, 
-	gacatvar = ga_index_cat,
-	startDT=dt_index, 
-	outcomevar = preg_outcome_clean,
-	eventDT=dt_GApreg, 
-	event = 'SAB' 'SB' 'MLS' 'UDL',
-	cr1='IAB' 'UAB', 
-	cr2='LBM' 'LBS',
-	psvars=ga_quartile age_at_index age_at_index_2
-			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post 
-			teratrx_pre num_outptpnc num_outptpnc_2,
-	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
-			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post
-			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
-	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
-	trtvar=trt,
-	numiterations=1,
-	initialseed=23244, 
-	outds=ana.sensudl_point,
-	outds_dist=ga_dist_sensudl_point,
-	outds_ps = ps_sensudl_point,
-	outds_surv = NA
-	);
-
-*Combine the stratified estimates according to the distribution of GA at index among
-those in the treated group;
-%combine_point_estimates(
-	gadist = ana.ga_dist_sensudl_point,
-	numgastrat = 2,
-	est = ana.sensudl_point_,
-	outds = ana.sensudl_point_overall
-	);
-
-*********Finally, conduct the bootstrap for SE;
-	
-*Now incorporate the IPCW;
-%competing2risk_weights(
-	boot=1, 
-	inds=ana.primary_cohort, 
-	gacatvar = ga_index_cat,
-	startDT=dt_index, 
-	outcomevar = preg_outcome_clean,
-	eventDT=dt_GApreg, 
-	event = 'SAB' 'SB' 'MLS' 'UDL',
-	cr1='IAB' 'UAB', 
-	cr2='LBM' 'LBS',
-	psvars=ga_quartile age_at_index age_at_index_2
-			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post 
-			teratrx_pre num_outptpnc num_outptpnc_2,
-	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
-			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post
-			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
-	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
-	trtvar=trt, 
-	numiterations=1000,
-	initialseed=23244, 
-	outds=ana.sensudl_boot,
-	outds_dist=ga_dist_sensudl_boot,
-	outds_ps = ps_sensudl_boot,
-	outds_surv = NA
-	);
-	
-	
-options mlogic mprint symbolgen notes;
-*Combine all the bootstrapped estimates;
-%combine_boot_estimates(
-			inputEst= ana.sensudl_boot, 
-			inputDist= ana.ga_dist_sensudl_boot,
-			numStrata= 2, 
-			output_stratified= ana.sensudl_boot_strat,
-			output_overall= ana.sensudl_boot_overall);
-
-
-*Stratified estimates with confidence intervals.;
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_1, pointdsn=ana.sensudl_point_1, output=ana.sensudl_boot_1_ci);
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_2, pointdsn=ana.sensudl_point_2, output=ana.sensudl_boot_2_ci);
-
-*OVerall estimates with confidence interval;
-%overall_estimates_w_CI(stderrdsn=ana.sensudl_boot_overall, pointdsn=ana.sensudl_point_overall, output=ana.sensudl_overall_boot_ci);
-	
-
-
-%count_missing_zero(inds1=ana.sensudl_boot_1, inds2=ana.sensudl_boot_2);
-
-	
-	
-
-
-
-
-
 
 /********************************************************************************************************************************************
 
-														04 - CONDUCT PRETERM BIRTH ANALYSIS
+										01 - IMPLEMENT EXCLUSION CRITERIA AND GET RELEVANT COUNTS
 
 ********************************************************************************************************************************************/
-	
 
-data ana.primary_cohort;
+*First: Exclude individuals with prior preeclampsia diagnosis codes upon cohort entry;
+data no_preeclampsia;
 set ana.primary_cohort;
+	where preeclampsia_pre = 0;
+run;
 
-	*Create outcome variable for preterm birth analyses where UDL is counted as SB;
-	if preg_outcome_clean in ('LBM' 'LBS') and dt_gapreg - dt_lmp < 259 then preg_outcome_ptb_udl = 'PTB';
-		else if dt_gapreg - dt_lmp >= 259 then preg_outcome_ptb_udl = 'TB'; /*If the outcome occurs after 37 weeks, then they survived the risk period. */
-		else preg_outcome_ptb_udl = preg_outcome_clean;
+/*proc contents data=no_preeclampsia; run;*/
 
-	if preg_outcome_ptb = 'TB' then dt_gapreg_ptb_udl = dt_lmp + 258; /*36*7+6 = 258 -- They have a non-event at the end of the risk period*/
-		else dt_gapreg_ptb_udl = dt_gapreg;
+*Second: Create outcome indicators.
+
+In this case, people will be censored at their first disenrollment from a MarketScan plan;
+data preeclampsia_outc;
+set no_preeclampsia;
+
+	***Create inpatient preeclampsia outcome;
+
+	*If censored prior to a pregnancy outcome or preeclampsia outcome, then mark as censored;
+	if . < cont_enrl_end_any < min(dt_gapreg, dt_preec_outcInpt) then do;
+		preec_inpt_outc = "UNK";
+		preec_inpt_dt = cont_enrl_end_any;
+	end;
+		*If experience competing event to preeclampsia up to 2 weeks post-outcome, then record relevant competing event;
+		else if dt_preec_outcInpt = . or dt_gapreg + 14 < dt_preec_outcInpt then do;
+			preec_inpt_outc = preg_outcome_clean;
+			preec_inpt_dt = dt_gapreg + 14;
+		end;
+		*Otherwise, they experienced preeclampsia first;
+		else do;
+			preec_inpt_outc = "PRE";
+			preec_inpt_dt = dt_preec_outcInpt;
+		end;
+
+
+	***Create any preeclampsia outcome;
+
+	*First get the minimum date;
+	dt_preeclampsia = min(dt_preec_outcInpt, dt_preec_outcOutpt);
+
+	*If censored prior to a pregnancy outcome or preeclampsia outcome, then mark as censored;
+	if . < cont_enrl_end_any < min(dt_gapreg, dt_preeclampsia) then do;
+		preec_any_outc = "UNK";
+		preec_any_dt = cont_enrl_end_any;
+	end;
+		*If experience competing event to preeclampsia up to 2 weeks post-outcome, then record relevant competing event;
+		else if dt_preeclampsia = . or dt_gapreg + 14 < dt_preeclampsia then do;
+			preec_any_outc = preg_outcome_clean;
+			preec_any_dt = dt_gapreg + 14;
+		end;
+		*Otherwise, they experienced preeclampsia first;
+		else do;
+			preec_any_outc = "PRE";
+			preec_any_dt = dt_preeclampsia;
+		end;
 
 run;
 
+
+/*proc freq data=preeclampsia_outc;*/
+/*	table preec_inpt_outc preec_any_outc / missing;*/
+/*run;*/
+/**/
+/*proc means data=preeclampsia_outc nmiss;*/
+/*	var preec_inpt_dt preec_any_dt;*/
+/*run;*/
+
 	
 
 
 
-*********Get the point estimates;
+	
+/********************************************************************************************************************************************
+
+													03 - ANY PREECLAMPSIA ANALYSIS
+
+Challenges to defining preeclampsia:
+- Outpatient encounters could represent rule-out diagnoses.
+- INpatient encounters may represent more severe cases but could just be deliveries with mild preeclampsia.
+
+Going to do both and see if particularly concerned about it. 
+Date of capture is important in time-to-event analyses.
+
+********************************************************************************************************************************************/
+	
+
 	
 *Now incorporate the IPCW;
 %competing3risk_weights(
 	boot=0, 
-	inds=ana.primary_cohort, 
+	inds=preeclampsia_outc, 
 	gacatvar = ga_index_cat,
 	startDT=dt_index, 
-	outcomevar = preg_outcome_ptb_udl,
-	eventDT=dt_GApreg_ptb_udl, 
-	event = 'PTB',
-	cr1='IAB' 'UAB', 
-	cr2='SAB' 'SB' 'MLS' 'UDL',
-	cr3='TB',
+	outcomevar = preec_any_outc,
+	eventDT=preec_any_dt, 
+	event = 'PRE',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='LBS' 'UDL' 'LBM',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
@@ -287,35 +226,41 @@ run;
 	trtvar=trt,
 	numiterations=1,
 	initialseed=23244, 
-	outds=ana.sensudl_point_ptb,
-	outds_dist=ga_dist_sensudl_point_ptb,
-	outds_ps = NA,
-	outds_surv = NA
+	outds=ana.preec_any_point,
+	outds_dist=ga_dist_preec_any_point,
+	outds_ps = ps_preec_any_point,
+	outds_surv = surv_preec_any
 	);
+
+
+*Look at the stratified estimates;
 
 *Combine the stratified estimates according to the distribution of GA at index among
 those in the treated group;
 %combine_point_estimates(
-	gadist = ana.ga_dist_sensudl_point_ptb,
+	gadist = ana.ga_dist_preec_any_point,
 	numgastrat = 2,
-	est = ana.sensudl_point_ptb_,
-	outds = ana.sensudl_point_ptb_overall
+	est = ana.preec_any_point_,
+	outds = ana.preec_any_point_overall
 	);
 
-
-*********Finally, conduct the bootstrap for SE;
 	
+
+
+*********Finally, conduct the bootstrap;
+	
+*Now incorporate the IPCW;
 %competing3risk_weights(
 	boot=1, 
-	inds=ana.primary_cohort, 
+	inds=preeclampsia_outc, 
 	gacatvar = ga_index_cat,
 	startDT=dt_index, 
-	outcomevar = preg_outcome_ptb_udl,
-	eventDT=dt_GApreg_ptb_udl, 
-	event = 'PTB',
-	cr1='IAB' 'UAB', 
-	cr2='SAB' 'SB' 'MLS' 'UDL',
-	cr3='TB',
+	outcomevar = preec_any_outc,
+	eventDT=preec_any_dt, 
+	event = 'PRE',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='LBS' 'UDL' 'LBM',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
@@ -338,8 +283,8 @@ those in the treated group;
 	trtvar=trt,
 	numiterations=1000,
 	initialseed=23244, 
-	outds=ana.sensudl_boot_ptb,
-	outds_dist=ga_dist_sensudl_boot_ptb,
+	outds=ana.preec_any_boot,
+	outds_dist=ga_dist_preec_any_boot,
 	outds_ps = NA,
 	outds_surv = NA
 	);
@@ -348,23 +293,159 @@ those in the treated group;
 options mlogic mprint symbolgen notes;
 *Combine all the bootstrapped estimates;
 %combine_boot_estimates(
-			inputEst= ana.sensudl_boot_ptb,
-			inputDist= ana.ga_dist_sensudl_boot_ptb,
+			inputEst= ana.preec_any_boot,
+			inputDist= ana.ga_dist_preec_any_boot,
 			numStrata= 2, 
-			output_stratified= ana.sensudl_ptb_boot_strat,
-			output_overall= ana.sensudl_ptb_boot_overall);
+			output_stratified= ana.preec_any_boot_strat,
+			output_overall= ana.preec_any_boot_overall);
 
 *Stratified estimates with confidence intervals.;
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_ptb_1, pointdsn=ana.sensudl_point_ptb_1, output=ana.sensudl_boot_ptb_1_ci);
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_ptb_2, pointdsn=ana.sensudl_point_ptb_2, output=ana.sensudl_boot_ptb_2_ci);
+%strat_estimates_w_CI(bootdsn=ana.preec_any_boot_1, pointdsn=ana.preec_any_point_1, output=ana.preec_any_boot_1_ci);
+%strat_estimates_w_CI(bootdsn=ana.preec_any_boot_2, pointdsn=ana.preec_any_point_2, output=ana.preec_any_boot_2_ci);
 
 *OVerall estimates with confidence interval;
-%overall_estimates_w_CI(stderrdsn=ana.sensudl_ptb_boot_overall, pointdsn=ana.sensudl_point_ptb_overall, output=ana.sensudl_overall_ptb_boot_ci);
+%overall_estimates_w_CI(stderrdsn=ana.preec_any_boot_overall, pointdsn=ana.preec_any_point_overall, output=ana.preec_any_boot_ci);
 
 	
-%count_missing_zero(inds1=ana.sensudl_boot_ptb_1, inds2=ana.sensudl_boot_ptb_2);
+%count_missing_zero(inds1=ana.preec_any_boot_1, inds2=ana.preec_any_boot_2);
 
 
 
 
 
+
+
+
+
+
+
+/********************************************************************************************************************************************
+
+												03 - INPATIENT PREECLAMPSIA ANALYSIS
+
+Challenges to defining preeclampsia:
+- Outpatient encounters could represent rule-out diagnoses.
+- INpatient encounters may represent more severe cases but could just be deliveries with mild preeclampsia.
+
+This section is only going to focus on the inpatient records for preeclampsia.
+
+********************************************************************************************************************************************/
+	
+
+	
+*Now incorporate the IPCW;
+%competing3risk_weights(
+	boot=0, 
+	inds=preeclampsia_outc, 
+	gacatvar = ga_index_cat,
+	startDT=dt_index, 
+	outcomevar = preec_inpt_outc,
+	eventDT=preec_inpt_dt, 
+	event = 'PRE',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='LBS' 'UDL' 'LBM',
+	psvars=ga_quartile age_at_index age_at_index_2
+			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post 
+			teratrx_pre num_outptpnc num_outptpnc_2,
+	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
+			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	dovarsmodel = ga_quartile age_at_index year_index4
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post
+			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
+	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
+	trtvar=trt,
+	numiterations=1,
+	initialseed=23244, 
+	outds=ana.preec_inpt_point,
+	outds_dist=ga_dist_preec_inpt_point,
+	outds_ps = ps_preec_inpt_point,
+	outds_surv = surv_preec_inpt
+	);
+
+
+*Look at the stratified estimates;
+
+*Combine the stratified estimates according to the distribution of GA at index among
+those in the treated group;
+%combine_point_estimates(
+	gadist = ana.ga_dist_preec_inpt_point,
+	numgastrat = 2,
+	est = ana.preec_inpt_point_,
+	outds = ana.preec_inpt_point_overall
+	);
+
+	
+
+
+*********Finally, conduct the bootstrap;
+	
+*Now incorporate the IPCW;
+%competing3risk_weights(
+	boot=1, 
+	inds=preeclampsia_outc, 
+	gacatvar = ga_index_cat,
+	startDT=dt_index, 
+	outcomevar = preec_inpt_outc,
+	eventDT=preec_inpt_dt, 
+	event = 'PRE',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='LBS' 'UDL' 'LBM',
+	psvars=ga_quartile age_at_index age_at_index_2
+			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post 
+			teratrx_pre num_outptpnc num_outptpnc_2,
+	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
+			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	dovarsmodel = ga_quartile age_at_index year_index4
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post
+			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
+	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
+	trtvar=trt,
+	numiterations=1000,
+	initialseed=23244, 
+	outds=ana.preec_inpt_boot,
+	outds_dist=ga_dist_preec_inpt_boot,
+	outds_ps = NA,
+	outds_surv = NA
+	);
+	
+	
+options mlogic mprint symbolgen notes;
+*Combine all the bootstrapped estimates;
+%combine_boot_estimates(
+			inputEst= ana.preec_inpt_boot,
+			inputDist= ana.ga_dist_preec_inpt_boot,
+			numStrata= 2, 
+			output_stratified= ana.preec_inpt_boot_strat,
+			output_overall= ana.preec_inpt_boot_overall);
+
+*Stratified estimates with confidence intervals.;
+%strat_estimates_w_CI(bootdsn=ana.preec_inpt_boot_1, pointdsn=ana.preec_inpt_point_1, output=ana.preec_inpt_boot_1_ci);
+%strat_estimates_w_CI(bootdsn=ana.preec_inpt_boot_2, pointdsn=ana.preec_inpt_point_2, output=ana.preec_inpt_boot_2_ci);
+
+*OVerall estimates with confidence interval;
+%overall_estimates_w_CI(stderrdsn=ana.preec_inpt_boot_overall, pointdsn=ana.preec_inpt_point_overall, output=ana.preec_inpt_boot_ci);
+
+	
+%count_missing_zero(inds1=ana.preec_inpt_boot_1, inds2=ana.preec_inpt_boot_2);

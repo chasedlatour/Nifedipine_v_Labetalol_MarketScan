@@ -110,7 +110,5 @@ run;
 );
 
 
-
-
 %count_missing_zero(inds1=ana.p2019_boot_1, inds2=ana.p2019_boot_2);
 %count_missing_zero(inds1=ana.p2019_boot_ptb_1, inds2=ana.p2019_boot_ptb_2);

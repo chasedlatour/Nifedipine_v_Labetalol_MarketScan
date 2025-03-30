@@ -64,6 +64,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*libname lana slibref=ana server=server;*/
 /*libname lwork slibref=work server=server;*/
 /*libname ltemp slibref=temp server=server;*/
+/*libname lexpref slibref=expref server=server;*/
 
 
 *Create formats;
@@ -338,19 +339,114 @@ set ana.primary_cohort;
 	
 run;
 
-*Create a categorical variable for maternal age at index;
+*Add some additional variables for descriptives and analyses;
 data ana.primary_cohort;
 set ana.primary_cohort;
+
+	*Create a categorical variable for maternal age at index;
 	if  age_at_index <= 24 then age_at_index_cat = "<= 24";
 		else if age_at_index <= 29 then age_at_index_cat = "25-29";
 		else if age_at_index <= 34 then age_at_index_cat = "30-34";
 		else if age_at_index <= 39 then age_at_index_cat = "35-39";
 		else age_at_index_cat = ">= 40";
+
+	*Make a variable that is any antidiabetic;
+	if t2dmrx_post = 1 or t1t2dmrx_post = 1 or metforrx_post = 1 then any_antidiabeticrx_post = 1;
+		else any_antidiabeticrx_post = 0;
+	
 run;
 
 
+*****
+	Add information on class of antidiabetic;
 
 
+*First, grab the antidiabetic information that applies pre-index and assign a class to each medication;
+
+data antidiabetics;
+length class $45;
+set temp.cov_meds_63_dt_index_270;
+	where medication in ('t2dm' 'Metfor' 't1t2dm');
+
+	dt_index_year = year(dt_index);
+
+	if medication = 't1t2dm' then class  = "insulin";
+		else if medication = 'Metfor' then class = "metformin";
+		else do;
+
+			if atc_label = "ACARBOSE" then class = "Alpha glucosidase inhibitors";
+				else if atc_label = "ACETOHEXAMIDE" then class = "Sulfonylureas";
+				else if atc_label = "ALBIGLUTIDE" then class = "GLP-1";
+				else if atc_label in ("ALOGLIPTIN BENZOATE", "ALOGLIPTIN BENZOATE/METFORMIN HYDROCHLORIDE") then class = "DPP4i";
+				else if atc_label = "ALOGLIPTIN BENZOATE/PIOGLITAZONE HYDROCHLORIDE" then class = "DPP4i/Thiazolidinediones";
+				else if atc_label in ("CANAGLIFLOZIN","CANAGLIFLOZIN/METFORMIN HYDROCHLORIDE") then class = "SGLT2";
+				else if atc_label = "CHLORPROPAMIDE" then class = "Sulfonylureas";
+				else if atc_label in ("DAPAGLIFLOZIN PROPANEDIOL", "DAPAGLIFLOZIN PROPANEDIOL/METFORMIN HYDROCHLORIDE") then class = "SGLT2";
+				else if atc_label = "DAPAGLIFLOZIN/SAXAGLIPTIN" then class = "SGLT2/DPP4i";
+				else if atc_label = "DULAGLUTIDE" then class = "GLP-1";
+				else if atc_label in ("EMPAGLIFLOZIN", "EMPAGLIFLOZIN/METFORMIN HYDROCHLORIDE") then class = "SGLT2";
+				else if atc_label in ("EMPAGLIFLOZIN/LINAGLIPTIN", "EMPAGLIFLOZIN/LINAGLIPTIN/METFORMIN HYDROCHLORIDE") then class= "SGLT2/DPP4i";
+				else if atc_label in ("ERTUGLIFLOZIN", "ERTUGLIFLOZIN/METFORMIN HYDROCHLORIDE") then class = "SGLT2";
+				else if atc_label = "ERTUGLIFLOZIN/SITAGLIPTIN" then class = "SGLT2/DPP4i";
+				else if atc_label = "EXENATIDE" then class = "GLP-1";
+				else if atc_label = "GLIMEPIRIDE" then class = "Sulfonylureas";
+				else if atc_label in ("GLIMEPIRIDE/PIOGLITAZONE HYDROCHLORIDE", "GLIMEPIRIDE/ROSIGLITAZONE MALEATE") then class = "Sulfonylureas/Thiazolidinediones";
+				else if atc_label in ("GLIPIZIDE", "GLIPIZIDE/METFORMIN HYDROCHLORIDE") then class = "Sulfonylureas";
+				else if atc_label in ("GLYBURIDE", "GLYBURIDE, MICRONIZED", "GLYBURIDE/METFORMIN HYDROCHLORIDE", "TOLAZAMIDE") then class = "Sulfonylureas";
+				else if atc_label in ("INSULIN DEGLUDEC/LIRAGLUTIDE","LIRAGLUTIDE", "SEMAGLUTIDE") then class = "GLP-1";
+				else if atc_label in ("LINAGLIPTIN","LINAGLIPTIN/METFORMIN HYDROCHLORIDE") then class = "DPP4i";
+				else if atc_label in ("PIOGLITAZONE HYDROCHLORIDE", "METFORMIN HYDROCHLORIDE/PIOGLITAZONE HYDROCHLORIDE") then class = "Thiazolidinediones";
+				else if atc_label in ("METFORMIN HYDROCHLORIDE/REPAGLINIDE", "REPAGLINIDE", "NATEGLINIDE") then class = "Meglinitide";
+				else if atc_label in ("SAXAGLIPTIN HYDROCHLORIDE", "METFORMIN HYDROCHLORIDE/SAXAGLIPTIN HYDROCHLORIDE",
+										"SITAGLIPTIN PHOSPHATE" , "METFORMIN HYDROCHLORIDE/SITAGLIPTIN PHOSPHATE",
+										"SIMVASTATIN/SITAGLIPTIN PHOSPHATE") then class = "DPP4i";
+				else if atc_label in ("TOLBUTAMIDE", "TOLBUTAMIDE SODIUM") then class = "Sulfonylureas";
+				else if atc_label in ("METFORMIN HYDROCHLORIDE/ROSIGLITAZONE MALEATE", "ROSIGLITAZONE MALEATE") then class = "Thiazolidinediones";
+				else if atc_label = "MIGLITOL" then class = "Alpha glucosidase inhibitors";
+		end;
+
+	keep enrolid idxpren dt_index dt_index_year atc_label medication class;
+run;
+
+*Create indicator variables for each class of medication;
+
+proc sql;
+	create table antidiabetics_classes as
+	select distinct enrolid, idxpren, sum(class = "Alpha glucosidase inhibitors")>0 as alpha_glucosidase_post,
+		sum(class in ("DPP4i" "SGLT2/DPP4i")) > 0 as dpp4i_post, sum(class = "GLP-1") > 0 as glp1_post,
+		sum(class in ("SGLT2" "SGLT2/DPP4i")) > 0 as sglt2_post, 
+		sum(class = "Sulfonylureas")>0 as sulfonylureas_post, 
+		sum(class = "Thiazolidinediones")>0 as thiaz_post,
+		sum(class = "insulin")>0 as insulin_post,
+		sum(class = "metformin")>0 as metformin_post
+	from antidiabetics
+	group by enrolid, idxpren
+	;
+	quit;
+
+*merge these variables onto the pregnancy dataset;
+proc sql;
+	create table pregnancies_antidiabetics as
+	select distinct a.*, 
+		case when missing(b.enrolid) then 0 else b.alpha_glucosidase_post end as alpha_glucosidase_post,
+		case when missing(b.enrolid) then 0 else b.glp1_post end as glp1_post,
+		case when missing(b.enrolid) then 0 else b.dpp4i_post end as dpp4i_post,
+		case when missing(b.enrolid) then 0 else b.sglt2_post end as sglt2_post,
+		case when missing(b.enrolid) then 0 else b.sulfonylureas_post end as sulfonylureas_post,
+		case when missing(b.enrolid) then 0 else b.thiaz_post end as thiaz_post,
+		case when missing(b.enrolid) then 0 else b.insulin_post end as insulin_post,
+		case when missing(b.enrolid) then 0 else b.metformin_post end as metformin_post
+	from ana.primary_cohort as a
+	left join antidiabetics_classes as b
+	on a.enrolid=b.enrolid and a.idxpren=b.idxpren
+	;
+	quit;
+	
+
+
+data ana.primary_cohort;
+set pregnancies_antidiabetics;
+run;
 
 
 
@@ -370,15 +466,20 @@ run;
 
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = ana.primary_cohort, colVar = exposure,
-	rowVars = ga_index_days ga_index_lt14 age_at_index age_at_index_cat year_index year_le2019 chronichypertension_pre preeclampsia_pre
-		substance_use_pre nausea_pre pregestation_diab_post t2dmrx_post t1t2dmrx_post metforrx_post
-		obesity_post glp1wgtrx_post otherwgtrx_post bariatric_post migraine_pre recurlos_pre ckd_post 
-		thyroid_disorder_post thyroidrx_post 
-		depressi_post anxiety_post antideprx_post adhd_post adhdrx_post bipolar_post moodstabrx_post
-		ptsd_post schizo_post antipsyrx_post rural hyperlip_post teratrx_pre benzorx_post anticonvulrx_post
-		num_OutptPNC numOutptPNC_lt3 num_InptAdm  numInptADM_gt1,
+	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+		chronichypertension_pre preeclampsia_pre
+		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
+		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
+		ptsd_post schizo_post hyperlip_post   
+		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
+		sglt2_post sulfonylureas_post thiaz_post  
+		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
+		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Primary cohort overall without weights,
 	title = Table 1: Primary cohort);
+
+
 	
 
 %*Stratify by gestational age at index date;
@@ -392,25 +493,31 @@ run;
 
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_lt14, colVar = exposure,
-	rowVars = ga_index_days age_at_index age_at_index_cat year_index year_le2019 chronichypertension_pre preeclampsia_pre
-		substance_use_pre nausea_pre pregestation_diab_post t2dmrx_post t1t2dmrx_post metforrx_post
-		obesity_post glp1wgtrx_post otherwgtrx_post bariatric_post migraine_pre recurlos_pre ckd_post 
-		thyroid_disorder_post thyroidrx_post 
-		depressi_post anxiety_post antideprx_post adhd_post adhdrx_post bipolar_post moodstabrx_post
-		ptsd_post schizo_post antipsyrx_post rural hyperlip_post teratrx_pre benzorx_post anticonvulrx_post
-		num_OutptPNC numOutptPNC_lt3 num_InptAdm  numInptADM_gt1,
+	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+		chronichypertension_pre preeclampsia_pre
+		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
+		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
+		ptsd_post schizo_post hyperlip_post   
+		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
+		sglt2_post sulfonylureas_post thiaz_post  
+		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
+		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Unweighted primary cohort GA lt 14wk,
 	title = Table 1: Primary cohort where GA less than 14w at index);
 	
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_ge14, colVar = exposure,
-	rowVars = ga_index_days age_at_index age_at_index_cat year_index year_le2019 chronichypertension_pre preeclampsia_pre
-		substance_use_pre nausea_pre pregestation_diab_post t2dmrx_post t1t2dmrx_post metforrx_post
-		obesity_post glp1wgtrx_post otherwgtrx_post bariatric_post migraine_pre recurlos_pre ckd_post 
-		thyroid_disorder_post thyroidrx_post 
-		depressi_post anxiety_post antideprx_post adhd_post adhdrx_post bipolar_post moodstabrx_post
-		ptsd_post schizo_post antipsyrx_post rural hyperlip_post teratrx_pre benzorx_post anticonvulrx_post
-		num_OutptPNC numOutptPNC_lt3 num_InptAdm  numInptADM_gt1,
+	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+		chronichypertension_pre preeclampsia_pre
+		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
+		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
+		ptsd_post schizo_post hyperlip_post   
+		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
+		sglt2_post sulfonylureas_post thiaz_post  
+		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
+		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Unweighted primary cohort GA ge 14wk,
 	title = Table 1: Primary cohort where GA less than 14w at index);
 	
@@ -430,7 +537,6 @@ run;
 	cr2='LBM' 'LBS' 'UDL',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -522,7 +628,7 @@ proc sql;
 proc sort data=weighted;
 	by ga_strat trt;
 run;
-proc means data=weighted min p25 median mean p75 max nmiss;
+proc means data=weighted min  median mean max nmiss;
 	class ga_strat trt;
 	var smrw;
 run;
@@ -539,25 +645,31 @@ run;
 
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_lt14, colVar = exposure, wgtvar=smrw,
-	rowVars = ga_index_days age_at_index age_at_index_cat year_index year_le2019 chronichypertension_pre preeclampsia_pre
-		substance_use_pre nausea_pre pregestation_diab_post t2dmrx_post t1t2dmrx_post metforrx_post
-		obesity_post glp1wgtrx_post otherwgtrx_post bariatric_post migraine_pre recurlos_pre ckd_post 
-		thyroid_disorder_post thyroidrx_post 
-		depressi_post anxiety_post antideprx_post adhd_post adhdrx_post bipolar_post moodstabrx_post
-		ptsd_post schizo_post antipsyrx_post rural hyperlip_post teratrx_pre benzorx_post anticonvulrx_post
-		num_OutptPNC numOutptPNC_lt3 num_InptAdm  numInptADM_gt1,
+	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+		chronichypertension_pre preeclampsia_pre
+		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
+		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
+		ptsd_post schizo_post hyperlip_post   
+		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
+		sglt2_post sulfonylureas_post thiaz_post  
+		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
+		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Weighted primary cohort lt 14w,
 	title = Table 1: Primary cohort where GA less than 14w at index);
 	
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_ge14, colVar = exposure, wgtvar=smrw,
-	rowVars = ga_index_days ga_index_lt14 age_at_index age_at_index_cat year_index year_le2019 chronichypertension_pre preeclampsia_pre
-		substance_use_pre nausea_pre pregestation_diab_post t2dmrx_post t1t2dmrx_post metforrx_post
-		obesity_post glp1wgtrx_post otherwgtrx_post bariatric_post migraine_pre recurlos_pre ckd_post 
-		thyroid_disorder_post thyroidrx_post 
-		depressi_post anxiety_post antideprx_post adhd_post adhdrx_post bipolar_post moodstabrx_post
-		ptsd_post schizo_post antipsyrx_post rural hyperlip_post teratrx_pre benzorx_post anticonvulrx_post
-		num_OutptPNC numOutptPNC_lt3 num_InptAdm  numInptADM_gt1,
+	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+		chronichypertension_pre preeclampsia_pre
+		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
+		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
+		ptsd_post schizo_post hyperlip_post   
+		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
+		sglt2_post sulfonylureas_post thiaz_post  
+		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
+		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Weighted primary cohort ge 14w,
 	title = Table 1: Primary cohort where GA at least 14w at index);
 	
@@ -584,7 +696,6 @@ run;
 	cr2='LBM' 'LBS' 'UDL',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -592,8 +703,7 @@ run;
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
 			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp year_index4*t2dmrx_post 
-			diabetes_simp*t2dmrx_post 
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
 			depressi_post anxiety_post antideprx_post benzorx_post
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
@@ -732,7 +842,6 @@ run;
 	cr2='LBM' 'LBS' 'UDL',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -740,8 +849,7 @@ run;
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
 			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp year_index4*t2dmrx_post 
-			diabetes_simp*t2dmrx_post 
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
 			depressi_post anxiety_post antideprx_post benzorx_post
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
@@ -820,7 +928,6 @@ options mlogic mprint symbolgen notes;
 	cr3='TB',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -828,8 +935,7 @@ options mlogic mprint symbolgen notes;
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
 			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp year_index4*t2dmrx_post 
-			diabetes_simp*t2dmrx_post 
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
 			depressi_post anxiety_post antideprx_post benzorx_post
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
@@ -906,7 +1012,6 @@ run;
 	cr3='TB',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -914,8 +1019,7 @@ run;
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
 			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp year_index4*t2dmrx_post 
-			diabetes_simp*t2dmrx_post 
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
 			depressi_post anxiety_post antideprx_post benzorx_post
 			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
@@ -1206,3 +1310,44 @@ proc means data=ptb_ga3 min p10 p25 p50 p75 p90 max;
 run;
 	
 
+
+
+/********************************************************************************************
+
+Look at post-index antihypertensive use
+
+*********************************************************************************************/
+
+data primary_cohort;
+set ana.primary_cohort;
+run;
+
+*Look at the number with a non-exposure antihypertensive after the index date;
+data primary_cohort;
+set primary_cohort;
+
+	*Create a binary variable for filling a medication other than the exposure after the index date;
+	if dt_first_nonexp_antihtn ne . then nonexp_antihtn_binary = 1;
+		else nonexp_antihtn_binary = 0;
+
+	*Indicator for a gap in exposure fills, using 7 day grace period;
+	if dt_lastfill_daysupp_gap7 < dt_gapreg then gap7 = 1;
+		else gap7 = 0;
+
+	*Indicator for a gap in exposure fills, using 30 day grace period;
+	if dt_lastfill_daysupp_gap30 < dt_gapreg then gap30 = 1;
+		else gap30 = 0;
+	
+run;
+
+proc freq data=primary_cohort;
+	table trt*nonexp_antihtn_binary trt*gap30 / missing;
+run;
+
+
+
+
+*How many have GA <12 weeks gestation;
+proc freq data=ana.primary_cohort (where = (ga_at_index < 84));
+	table trt;
+run;

@@ -42,6 +42,34 @@ survival_ptb_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/da
     GA = ">=14 Weeks"
   )
 
+## Survival estimates based upon preeclampsia
+
+survival_preec_any_lt14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_preec_any_1.sas7bdat') %>% 
+  mutate(
+    Outcome = "Preeclampsia (Any Diagnosis)",
+    GA = "<14 Weeks"
+  )
+
+survival_preec_any_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_preec_any_2.sas7bdat') %>% 
+  mutate(
+    Outcome = "Preeclampsia (Any Diagnosis)",
+    GA = ">=14 Weeks"
+  )
+
+survival_preec_inpt_lt14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_preec_inpt_1.sas7bdat') %>% 
+  mutate(
+    Outcome = "Preeclampsia (Inpatient Diagnosis)",
+    GA = "<14 Weeks"
+  )
+
+survival_preec_inpt_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_preec_inpt_2.sas7bdat') %>% 
+  mutate(
+    Outcome = "Preeclampsia (Inpatient Diagnosis)",
+    GA = ">=14 Weeks"
+  )
+
+
+
 ```
 
 # Cumulative Incidence Curves for Study Outcomes
@@ -50,7 +78,7 @@ survival_ptb_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/da
 
 # Function to make the plot
 
-cum_incidence_primary <- function(survivaldsn, outcome_quo, ga_quo){
+cum_incidence_primary <- function(survivaldsn, outcome_quo, ga_quo, ymax=0.35, xmax=260){
   
   ggplot(survivaldsn, aes(x = days, 
                           y = cum_outcome, 
@@ -62,9 +90,9 @@ cum_incidence_primary <- function(survivaldsn, outcome_quo, ga_quo){
        subtitle = paste0("Gestational Age ", ga_quo, " at Index"),
        x = "Days from Index Date", 
        y = "Cumualtive Indicidence", color = "Treatment") +
-  ylim(0, 0.35) + 
-  scale_x_continuous(breaks = seq(0, 260, by = 50),
-                     limits = c(0, 260)) +
+  ylim(0, ymax) + 
+  scale_x_continuous(breaks = seq(0, xmax, by = 50),
+                     limits = c(0, xmax)) +
   scale_color_manual(values = c("0" = "navy", "1" = "orange"), 
                      labels = c("Labetalol", "Nifedipine")) +
   theme_minimal(base_size = 12)+
@@ -104,6 +132,42 @@ cum_incidence_primary(survivalds=survival_ptb_lt14,
                       outcome_quo="Preterm Birth",
                       ga_quo=">=14 Weeks")
 dev.off()
+
+
+# Preeclampsia outcomes
+
+
+pdf("Cumulative incidence-preeclampsia any-lt14 weeks.pdf", height = h, width = w)
+cum_incidence_primary(survivalds=survival_preec_any_lt14,
+                      outcome_quo="Preeclampsia (Any Diagnosis)",
+                      ga_quo="<14 Weeks",
+                      ymax = 0.4, xmax=274)
+dev.off()
+
+
+pdf("Cumulative incidence-preeclampsia any-ge14 weeks.pdf", height = h, width = w)
+cum_incidence_primary(survivalds=survival_preec_any_ge14,
+                      outcome_quo="Preeclampsia (Any Diagnosis)",
+                      ga_quo=">=14 Weeks",
+                      ymax = 0.4, xmax=274)
+dev.off()
+
+
+pdf("Cumulative incidence-preeclampsia inpt-lt14 weeks.pdf", height = h, width = w)
+cum_incidence_primary(survivalds=survival_preec_inpt_lt14,
+                      outcome_quo="Preeclampsia (Inpatient Diagnosis)",
+                      ga_quo="<14 Weeks",
+                      ymax = 0.4, xmax=274)
+dev.off()
+
+
+pdf("Cumulative incidence-preeclampsia inpt-ge14 weeks.pdf", height = h, width = w)
+cum_incidence_primary(survivalds=survival_preec_inpt_ge14,
+                      outcome_quo="Preeclampsia (Inpatient Diagnosis)",
+                      ga_quo=">=14 Weeks",
+                      ymax = 0.4, xmax=274)
+dev.off()
+
 
 
 ```

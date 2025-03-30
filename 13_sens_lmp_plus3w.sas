@@ -106,27 +106,27 @@ run;
 
 %*Create the cohort like we did the primary cohort -- implement relevant inclusion and exclusion criteria.;
 
-%implement_exclusions(inds=ana.preg_covar_63_dt_index_270_p21, outds=ana.sens_lmpp21_cohort);
+%implement_exclusions(inds=ana.preg_covar_63_dt_index_270_p21, outds=sens_lmpp21_cohort);
 
 
 
 *Get the distribution by treatment;
-proc freq data=ana.sens_lmpp21_cohort;
+proc freq data=sens_lmpp21_cohort;
 	table trt / missing;
 run;
 
-proc freq data=ana.sens_lmpp21_cohort (where = (ga_at_index < 98));
+proc freq data=sens_lmpp21_cohort (where = (ga_at_index < 98));
 	table trt / missing;
 run;
 
-proc freq data=ana.sens_lmpp21_cohort (where = (ga_at_index >= 98));
+proc freq data=sens_lmpp21_cohort (where = (ga_at_index >= 98));
 	table trt / missing;
 run;
 
 *Now, conduct the analyses;
 
 %repeat_in_subset(
-	inds=ana.sens_lmpp21_cohort,
+	inds=ana.preg_covar_63_dt_index_270_p21,
 	sens=lmpp21,
 	where=NA,
 	numboot=1000

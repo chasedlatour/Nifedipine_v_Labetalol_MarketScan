@@ -6,7 +6,10 @@ PURPOSE: The purpose of this program is to clean the pregnancy cohort that we de
 Goal: 
 Output data: 
 
-Date: 12.19.20f24
+Date: 12.19.2024
+
+Updates: 
+- CDL: 3.29.25 -- Now only output post-index antihypertensive fills for those where lookbackdt is dt_index.
 ********************************************************************************************************************************************/
 
 
@@ -2862,7 +2865,7 @@ LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt 
 
 /********************************************************************************************************************************************
 
-												04 - IDENTIFY POST-INDEX ANTIHYPERTENSIVES
+										04 - IDENTIFY POST-INDEX ANTIHYPERTENSIVES AND PREECLAMPSIA
 
 Derive post-index variables:
 - First fill for an antihypertensive other than the exposure
@@ -2870,8 +2873,121 @@ Derive post-index variables:
 - First date where we see a gap in usage: days supply + 0, 7, 14, and 30 d gap
 - The number of fills for non-exposure antihypertensive
 - The number of distinct ATC labels.
+- First preeclampsia diagnosis after the index date, on or before the outcome date.
 
 ********************************************************************************************************************************************/
+
+
+%macro get_dx_outcomes(input_pregs, input_ref, base);
+
+	%let numYr = %sysfunc(countw(&years));
+
+	%do d=1 %to &numYr;
+
+		%let loop&d = %scan(&years, &d);
+
+		%*Create dataset with all relevant diagnosis codes for identified pregnancy for the year defined by &loop&d;
+		proc sql;
+			create table _diagnoses_subset as
+			select distinct a.enrolid format=best12. length=8, a.svcdate format=MMDDYY10. length=8, 
+				c.idxpren format=best12. length=8, c.dt_index format=MMDDYY10. length=8, 
+				a.dxLoc format=$9. length=9, a.dxNum format=best12. length=8, b.code format=$7. length=7, 
+				b.diagnosis format=$8. length=8
+			from %if &&loop&d = 2016 %then %do; der.alldx102016 %end; %else %do; der.alldx&&loop&d. %end; as a
+			inner join &input_pregs as c
+			on a.enrolid=c.enrolid and c.dt_index < a.svcdate <= c.dt_gapreg+14
+			inner join &input_ref as b
+			on a.dx&&loop&d. = b.code
+			;
+			quit;
+
+		%*Append the dataset onto the base dataset;
+		proc append base=&base data=_diagnoses_subset; run;
+
+	%end;
+
+%mend;
+
+
+
+
+
+
+
+/*
+MACRO: identify_htn_outcomes
+PURPOSE: The purpose of this macro is to identify the occurrence of preeclampsia after the index
+date. We are interested in the first diagnosis.
+
+INPUTs:
+- INPUT_DATA = input pregnancy datset
+- OUTPUT_DATA = output pregnancy datset
+- DIAGNOSES_DATA = dataset with diagnosis codes from the claims data
+*/
+
+%macro identify_htn_outcomes(INPUT_DATA, OUTPUT_DATA);
+
+	%*Create the reference codelist for preeclampsia;
+	proc sql;
+		create table preeclampsia as
+		select distinct code, "Preec" as diagnosis, 0 as exclusion_criteria, "" as outcome format=$57. length=57, "" as algorithm_step format=$9. length=9
+		from covref.preeclampsia_dx where codetype = "DX10"
+		;
+		quit;
+
+	%*Now get the relevant diagnosis codes for preeclampsia;
+	data _diagnoses_outcomes;
+		length enrolid 8 svcdate 8 idxpren 8 dt_index 8 dxLoc $9 dxNum 8 code $7 diagnosis $8;
+		format enrolid best12. svcdate MMDDYY10. idxpren best12. dt_index MMDDYY10. dxLoc $9. dxnum best12. code $7. diagnosis $8.;
+		stop;
+	run;
+
+	%get_dx_outcomes(input_pregs=&INPUT_DATA, input_ref = preeclampsia, base = _diagnoses_outcomes);
+
+	%*Do some data cleaning on the codes;
+	data _diagnoses2;
+	set _diagnoses_outcomes;
+		%*Determine if the diagnosis code was on an outpatient record (outpatient service claim) or inpatient record (inpatient service or
+			inpatient admission claim);
+		if dxLoc = "OutptServ" then location = "Outpt";
+			else if dxLoc in ("InptServ" "InptAdm") then location = "Inpt";
+			else location = "";
+		if location = "" then delete; /*Should not be a problem*/
+	run;
+
+	%*Now, we want the first instance after the index date, on or up to 2 weeks after the outcome date;
+	proc sql;
+		create table _diagnoses_outcomes2 as
+		select distinct enrolid, idxpren, location, min(svcdate) as dt_preeclampsia format=MMDDYY10.
+		from _diagnoses2
+		group by enrolid, idxpren, location
+		;
+		quit;
+
+	%*Transpose the dataset;
+	proc transpose data=_diagnoses_outcomes2 out=_diagnoses2_tranpose(drop = _NAME_) prefix=dt_preec_outc;
+		by enrolid idxpren;
+		var dt_preeclampsia;
+		id location;
+	run;
+
+	%*Now add those dates onto the output pregnancies dataset;
+	proc sql;
+		create table &OUTPUT_DATA as
+		select a.*, b.dt_preec_outcOutpt, b.dt_preec_outcInpt
+		from &INPUT_DATA as a
+		left join _diagnoses2_tranpose as b
+		on a.enrolid=b.enrolid and a.idxpren=b.idxpren
+		;
+		quit;
+
+	%*Delete the unnecessary datasets;
+	proc datasets gennum=all;
+		delete _diagnoses: ;
+	run; quit; run;
+
+%mend;
+
 
 
 
@@ -2951,6 +3067,9 @@ LOOKBACKDAYS -- Lookback period from LOOKBACKDT in days
 	set temp.preg_covar_&lmpindex._&lookbackdt._&lookbackdays;
 	run;
 
+	%*Get the post-index preeclampsia outcomes -- Added 3.27.2025;
+	%identify_htn_outcomes(INPUT_DATA=_pregnancies, OUTPUT_DATA=_postidx_preec);
+
 	%*Get all antihypertensive fills that occurred between the index date and dt_gapreg;
 
 	%*Create an empty dataset that we are going to append the records too. We need to manually set the length
@@ -2966,8 +3085,14 @@ LOOKBACKDAYS -- Lookback period from LOOKBACKDT in days
 	%*Explicit statement to remove all duplicates, though there should not be any. CDL: ADDED 1.28.2025;
 	proc sort data=_postidx_antihypertensives nodup; by enrolid idxpren; run;
 	
-	%*Save this dataset in case needed;
-	data temp.postidx_antihypertensives_&lmpindex; set _postidx_antihypertensives; run;
+	%*We only want to save this dataset for the index date.;
+
+	%if &lookbackdt = dt_index %then %do;
+
+		%*Save this dataset in case needed;
+		data temp.postidx_antihypertensives_&lmpindex; set _postidx_antihypertensives; run;
+
+	%end;
 
 	%*****Identify key variables;
 
@@ -3074,7 +3199,8 @@ LOOKBACKDAYS -- Lookback period from LOOKBACKDT in days
 			e.svcdate as dt_lastfill_gap0, e.next_fill as dt_lastfill_daysupp_gap0 format=MMDDYY10.,
 			f.svcdate as dt_lastfill_gap7, f.next_fill as dt_lastfill_daysupp_gap7 format=MMDDYY10.,
 			g.svcdate as dt_lastfill_gap30, g.next_fill as dt_lastfill_daysupp_gap30 format=MMDDYY10.,
-			h.svcdate as dt_lastfill_gap45, h.next_fill as dt_lastfill_daysupp_gap45 format=MMDDYY10.
+			h.svcdate as dt_lastfill_gap45, h.next_fill as dt_lastfill_daysupp_gap45 format=MMDDYY10.,
+			i.dt_preec_outcOutpt, i.dt_preec_outcInpt
 		from _pregnancies as a
 		left join first_fill_any as b
 		on a.enrolid=b.enrolid and a.idxpren=b.idxpren
@@ -3088,13 +3214,12 @@ LOOKBACKDAYS -- Lookback period from LOOKBACKDT in days
 		on a.enrolid=g.enrolid and a.idxpren=g.idxpren
 		left join _exposure_45 as h
 		on a.enrolid=h.enrolid and a.idxpren=h.idxpren
+		left join _postidx_preec as i
+		on a.enrolid=i.enrolid and a.idxpren=i.idxpren
 		;
 		quit;
 
 %mend;
-
-
-
 
 
 
@@ -3107,61 +3232,61 @@ LOOKBACKDAYS -- Lookback period from LOOKBACKDT in days
 ************************************************************************************************************/
 
 %********gestational age at index is 63 days;
-%derive_initial_cohort(lmpindex = 63, maxfill = 258); *maxfill = 36*7+6 or 36w6d;
-proc datasets gennum=all noprint; delete _:; run;
-
-%*Index date analysis;
-%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270);
-%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270);
-%get_allcovariates(lmpindex=63, lookbackdt = dt_index, lookbackdays=270);
+/*%derive_initial_cohort(lmpindex = 63, maxfill = 258); *maxfill = 36*7+6 or 36w6d;*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/**/
+/*%*Index date analysis;*/
+/*%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270);*/
+/*%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270);*/
+/*%get_allcovariates(lmpindex=63, lookbackdt = dt_index, lookbackdays=270);*/
 %identfy_postid_antihypertensives(lmpindex=63, lookbackdt = dt_index, lookbackdays=270);
 
 %*LMP-based sensitivity analysis;
-%identify_new_users(63, lookbackdt = dt_lmp, lookbackdays = 180);
-proc datasets gennum=all noprint; delete _:; run;
-%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_lmp, lookbackdays=180);
-%get_allcovariates(lmpindex=63, lookbackdt = dt_lmp, lookbackdays=180);
+/*%identify_new_users(63, lookbackdt = dt_lmp, lookbackdays = 180);*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/*%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_lmp, lookbackdays=180);*/
+/*%get_allcovariates(lmpindex=63, lookbackdt = dt_lmp, lookbackdays=180);*/
 %identfy_postid_antihypertensives(lmpindex=63, lookbackdt = dt_lmp, lookbackdays=180);
 
 
 
 	
 %******gestational age at index is 42 days;
-%derive_initial_cohort(lmpindex = 42, maxfill = 258);
-proc datasets gennum=all noprint; delete _:; run;
-
-%*Index date analysis;
-%identify_new_users(42, lookbackdt = dt_index, lookbackdays = 270);
-proc datasets gennum=all noprint; delete _:; run;
-%define_incl_excl(lmpindex=42, gap=31, lookbackdt = dt_index, lookbackdays=270);
-%get_allcovariates(lmpindex=42, lookbackdt = dt_index, lookbackdays=270);
+/*%derive_initial_cohort(lmpindex = 42, maxfill = 258);*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/**/
+/*%*Index date analysis;*/
+/*%identify_new_users(42, lookbackdt = dt_index, lookbackdays = 270);*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/*%define_incl_excl(lmpindex=42, gap=31, lookbackdt = dt_index, lookbackdays=270);*/
+/*%get_allcovariates(lmpindex=42, lookbackdt = dt_index, lookbackdays=270);*/
 %identfy_postid_antihypertensives(lmpindex=42, lookbackdt = dt_index, lookbackdays=270);
 
-%*LMP-based sensitivity analysis;
-%identify_new_users(42, lookbackdt = dt_lmp, lookbackdays = 180);
-proc datasets gennum=all noprint; delete _:; run;
-%define_incl_excl(lmpindex=42, gap=31, lookbackdt = dt_lmp, lookbackdays=180);
-%get_allcovariates(lmpindex=42, lookbackdt = dt_lmp, lookbackdays=180);
-%identfy_postid_antihypertensives(lmpindex=42, lookbackdt = dt_lmp, lookbackdays=180);
+/*%*LMP-based sensitivity analysis;*/
+/*%identify_new_users(42, lookbackdt = dt_lmp, lookbackdays = 180);*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/*%define_incl_excl(lmpindex=42, gap=31, lookbackdt = dt_lmp, lookbackdays=180);*/
+/*%get_allcovariates(lmpindex=42, lookbackdt = dt_lmp, lookbackdays=180);*/
+/*%identfy_postid_antihypertensives(lmpindex=42, lookbackdt = dt_lmp, lookbackdays=180);*/
 
 
-%*******gestational age at index is 84 days;
-%derive_initial_cohort(lmpindex = 84, maxfill = 258);
-proc datasets gennum=all noprint; delete _:; run;
-
-%*Index date analysis;
-%identify_new_users(84, lookbackdt = dt_index, lookbackdays = 270);
-proc datasets gennum=all noprint; delete _:; run;
-%define_incl_excl(lmpindex=84, gap=31, lookbackdt = dt_index, lookbackdays=270);
-%get_allcovariates(lmpindex=84, lookbackdt = dt_index, lookbackdays=270);
+/*%*******gestational age at index is 84 days;*/
+/*%derive_initial_cohort(lmpindex = 84, maxfill = 258);*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/**/
+/*%*Index date analysis;*/
+/*%identify_new_users(84, lookbackdt = dt_index, lookbackdays = 270);*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/*%define_incl_excl(lmpindex=84, gap=31, lookbackdt = dt_index, lookbackdays=270);*/
+/*%get_allcovariates(lmpindex=84, lookbackdt = dt_index, lookbackdays=270);*/
 %identfy_postid_antihypertensives(lmpindex=84, lookbackdt = dt_index, lookbackdays=270);
 
-%*LMP-based sensitivity analysis;
-%identify_new_users(84, lookbackdt = dt_lmp, lookbackdays = 180);
-proc datasets gennum=all noprint; delete _:; run;
-%define_incl_excl(lmpindex=84, gap=31, lookbackdt = dt_lmp, lookbackdays=180);
-%get_allcovariates(lmpindex=84, lookbackdt = dt_lmp, lookbackdays=180);
-%identfy_postid_antihypertensives(lmpindex=84, lookbackdt = dt_lmp, lookbackdays=180);
+/*%*LMP-based sensitivity analysis;*/
+/*%identify_new_users(84, lookbackdt = dt_lmp, lookbackdays = 180);*/
+/*proc datasets gennum=all noprint; delete _:; run;*/
+/*%define_incl_excl(lmpindex=84, gap=31, lookbackdt = dt_lmp, lookbackdays=180);*/
+/*%get_allcovariates(lmpindex=84, lookbackdt = dt_lmp, lookbackdays=180);*/
+/*%identfy_postid_antihypertensives(lmpindex=84, lookbackdt = dt_lmp, lookbackdays=180);*/
 
 
 

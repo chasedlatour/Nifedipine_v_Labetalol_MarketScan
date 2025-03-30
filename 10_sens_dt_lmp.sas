@@ -104,15 +104,15 @@ run;
 ********************************************************************************************************************************************/
 
 %*Create the cohort like we did the primary cohort -- implement relevant inclusion and exclusion criteria.;
-%implement_exclusions(inds=ana.preg_covar_63_dt_lmp_180, outds=ana.sens_dt_lmp);
+%implement_exclusions(inds=ana.preg_covar_63_dt_lmp_180, outds=sens_dt_lmp);
 
-proc freq data=ana.sens_dt_lmp;
+proc freq data=sens_dt_lmp;
 	table trt / missing;
 run;
 
 
 %repeat_in_subset(
-	inds=ana.sens_dt_lmp,
+	inds=ana.preg_covar_63_dt_lmp_180,
 	sens=dtlmp,
 	where=NA,
 	numboot=1000

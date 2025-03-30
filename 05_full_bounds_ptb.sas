@@ -157,7 +157,6 @@ Assume that neither nifedipine nor labetalol initiators without pregnnacy outcom
 		bootnum=1000,
 		psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -187,7 +186,6 @@ Assume that both nifedipine nor labetalol initiators without pregnnacy outcomes 
 		bootnum=1000,
 		psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -217,7 +215,6 @@ Assume that both nifedipine nor labetalol initiators without pregnnacy outcomes 
 		bootnum=1000,
 		psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,
@@ -246,7 +243,6 @@ Assume that both nifedipine nor labetalol initiators without pregnnacy outcomes 
 		bootnum=1000,
 		psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post 
 			teratrx_pre num_outptpnc num_outptpnc_2,

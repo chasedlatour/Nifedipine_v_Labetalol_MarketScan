@@ -96,6 +96,49 @@ options mprint;
 %mend;
 
 
+%macro redbook_med(covar=, outds=);
+
+	data &covar;
+		format group $25.;
+		length code $25; 
+		set codelist."&covar"n;
+	run;
+
+	*Select all the distint group values from t2dm_rx;
+	proc sql;
+		create table group as
+		select distinct upcase(group) as group
+		from &covar
+		;
+		quit;
+
+	proc sql;
+	    create table group_rx2 as 
+	    select * 
+	    from red.redbook (where = (ACTIND = 'Y')) r
+	    where exists (
+	        select 1 
+	        from group t
+	        where upcase(r.gennme) like cats('%', t.group, '%')
+	    );
+		quit;
+		
+	*Create the variables that we will need to match those from the First Data Bank file;
+	data group_rx3;
+	set group_rx2;
+		format ndc9 $9. atc_label $56.;
+		ndc9 = substr(ndcnum, 1, 9);
+		atc_label = upcase(gennme);
+	run;	
+
+	*output the dataset that we want;
+	data &outds;
+	set group_rx3;
+	run;
+
+%mend;
+
+
 
 
 ********CHRONIC HYPERTENSION code list;
@@ -196,49 +239,23 @@ proc sql;
 
 ************ANTIDIABETICS for type-1 and type-2 diabetes;
 
-%simple_med(t1t2dm_antidiabetics);
+/*%simple_med(t1t2dm_antidiabetics);*/
+
+%redbook_med(covar = t1t2dm_antidiabetics, outds=t1t2);
+
+data rxcov.t1t2dm_antidiabetics_rx;
+set t1t2;
+	where prdctds ne "Surgical/Device";
+run;
 
 
 
 ************ANTIDIABETICS for type-2 diabetes only;
 
-data t2dm_rx;
-	format group $25.;
-	length code $25; 
-	set codelist."t2dm_antidiabetics"n;
-run;
-
-*Select all the distint group values from t2dm_rx;
-proc sql;
-	create table t2dm_group as
-	select distinct upcase(group) as group
-	from t2dm_rx
-	;
-	quit;
-
-
-proc sql;
-    create table t2dm_rx2 as 
-    select * 
-    from red.redbook r
-    where exists (
-        select 1 
-        from t2dm_group t
-        where upcase(r.gennme) like cats('%', t.group, '%')
-    );
-	quit;
-	
-	
-*Create the variables that we will need to match those from the First Data Bank file;
-data t2dm_rx3;
-set t2dm_rx2;
-	format ndc9 $9. atc_label $56.;
-	ndc9 = substr(ndcnum, 1, 9);
-	atc_label = upcase(gennme);
-run;	
+%redbook_med(covar = t2dm_antidiabetics, outds=t2dm);	
 
 data rxcov.t2dm_antidiabetics_rx;
-set t2dm_rx3;
+set t2dm;
 	where prodnme not in ("WEGOVY" "SAXENDA");
 run;
 
@@ -247,7 +264,7 @@ run;
 
 *First get the GLP-1 agonists;
 data rxcov.wgtloss_glp1_rx;
-set t2dm_rx3;
+set t2dm;
 	where prodnme in ("WEGOVY" "SAXENDA");
 run;
 
@@ -341,7 +358,10 @@ run;
 
 ********METFORMIN code list;
 
-%simple_med(metformin);
+/*%simple_med(metformin);*/
+
+%redbook_med(covar=metformin, outds=rxcov.metformin_rx);
+
 
 
 *********SMOKING and tobacco;

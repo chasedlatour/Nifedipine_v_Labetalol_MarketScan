@@ -207,7 +207,6 @@ run;
 		numboot = 2,
 		psvars=ga_quartile age_at_index age_at_index_2
 					year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-					year_index2017*t2dmrx_post diabetes_simp*t2dmrx_post
 					nausea_pre recurlos_pre obesity_post chronichypertension_pre
 					depressi_post anxiety_post antideprx_post benzorx_post 
 					teratrx_pre num_outptpnc num_outptpnc_2,
@@ -215,8 +214,7 @@ run;
 					nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
 					benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
 		dovarsmodel=ga_quartile age_at_index year_index4
-					t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp year_index4*t2dmrx_post 
-					diabetes_simp*t2dmrx_post 
+					t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
 					nausea_pre recurlos_pre obesity_post chronichypertension_pre 
 					depressi_post anxiety_post antideprx_post benzorx_post
 					teratrx_pre num_outptpnc num_outptpnc_2 rural2,
