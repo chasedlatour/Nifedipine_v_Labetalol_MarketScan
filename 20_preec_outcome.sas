@@ -118,25 +118,42 @@ run;
 *Second: Create outcome indicators.
 
 In this case, people will be censored at their first disenrollment from a MarketScan plan;
-data preeclampsia_outc;
+data ana.preeclampsia_outc;
 set no_preeclampsia;
 
 	***Create inpatient preeclampsia outcome;
 
-	*If censored prior to a pregnancy outcome or preeclampsia outcome, then mark as censored;
-	if . < cont_enrl_end_any < min(dt_gapreg, dt_preec_outcInpt) then do;
+	*First, create the dates ignoring censoring;
+	*if preeclampsia occurs prior to their last prenatal encounter, then they have preeclampsia;
+	if preg_outcome_clean = "UNK" and . < dt_preec_outcInpt < dt_gapreg then do;
+		preec_inpt_nocensor = "PRE";
+		preec_inpt_dt_nocensor = dt_preec_outcInpt;
+	end;
+		*Otherwise, if preeclampsia does not occur prior to the last prenatal encounter, then censoredf;
+		else if preg_outcome_clean = "UNK" then do;
+			preec_inpt_nocensor = "UNK";
+			preec_inpt_dt_nocensor = dt_gapreg;
+		end;
+		*otherwise, if they have preeclampsia prior to 14 days aftre their pregnancy outcome, then they have preeclampsia.;
+		else if . < dt_preec_outcInpt < dt_gapreg + 14 then do;
+			preec_inpt_nocensor = "PRE";
+			preec_inpt_dt_nocensor = dt_preec_outcInpt;
+		end;
+		*otherwise, they do not have an outcome.;
+		else do;
+			preec_inpt_nocensor = preg_outcome_clean;
+			preec_inpt_dt_nocensor = dt_gapreg + 14;
+		end;
+
+	*Now implement the censoring due to disenrollment.;
+	*If censored before their preeclampsia outcome, then censored. otherwise it is the same;
+	if . < cont_enrl_end_any < preec_inpt_dt_nocensor then do;
 		preec_inpt_outc = "UNK";
 		preec_inpt_dt = cont_enrl_end_any;
 	end;
-		*If experience competing event to preeclampsia up to 2 weeks post-outcome, then record relevant competing event;
-		else if dt_preec_outcInpt = . or dt_gapreg + 14 < dt_preec_outcInpt then do;
-			preec_inpt_outc = preg_outcome_clean;
-			preec_inpt_dt = dt_gapreg + 14;
-		end;
-		*Otherwise, they experienced preeclampsia first;
 		else do;
-			preec_inpt_outc = "PRE";
-			preec_inpt_dt = dt_preec_outcInpt;
+			preec_inpt_outc = preec_inpt_nocensor;
+			preec_inpt_dt = preec_inpt_dt_nocensor;
 		end;
 
 
@@ -145,30 +162,47 @@ set no_preeclampsia;
 	*First get the minimum date;
 	dt_preeclampsia = min(dt_preec_outcInpt, dt_preec_outcOutpt);
 
-	*If censored prior to a pregnancy outcome or preeclampsia outcome, then mark as censored;
-	if . < cont_enrl_end_any < min(dt_gapreg, dt_preeclampsia) then do;
+	*First, create the dates ignoring censoring;
+	*if preeclampsia occurs prior to their last prenatal encounter, then they have preeclampsia;
+	if preg_outcome_clean = "UNK" and . < dt_preeclampsia < dt_gapreg then do;
+		preec_any_nocensor = "PRE";
+		preec_any_dt_nocensor = dt_preeclampsia;
+	end;
+		*Otherwise, if preeclampsia does not occur prior to the last prenatal encounter, then censoredf;
+		else if preg_outcome_clean = "UNK" then do;
+			preec_any_nocensor = "UNK";
+			preec_any_dt_nocensor = dt_gapreg;
+		end;
+		*otherwise, if they have preeclampsia prior to 14 days aftre their pregnancy outcome, then they have preeclampsia.;
+		else if . < dt_preeclampsia < dt_gapreg + 14 then do;
+			preec_any_nocensor = "PRE";
+			preec_any_dt_nocensor = dt_preeclampsia;
+		end;
+		*otherwise, they do not have an outcome.;
+		else do;
+			preec_any_nocensor = preg_outcome_clean;
+			preec_any_dt_nocensor = dt_gapreg + 14;
+		end;
+
+	*Now implement the censoring due to disenrollment.;
+	*If censored before their preeclampsia outcome, then censored. otherwise it is the same;
+	if . < cont_enrl_end_any < preec_any_dt_nocensor then do;
 		preec_any_outc = "UNK";
 		preec_any_dt = cont_enrl_end_any;
 	end;
-		*If experience competing event to preeclampsia up to 2 weeks post-outcome, then record relevant competing event;
-		else if dt_preeclampsia = . or dt_gapreg + 14 < dt_preeclampsia then do;
-			preec_any_outc = preg_outcome_clean;
-			preec_any_dt = dt_gapreg + 14;
-		end;
-		*Otherwise, they experienced preeclampsia first;
 		else do;
-			preec_any_outc = "PRE";
-			preec_any_dt = dt_preeclampsia;
+			preec_any_outc = preec_any_nocensor;
+			preec_any_dt = preec_any_dt_nocensor;
 		end;
 
 run;
 
 
-/*proc freq data=preeclampsia_outc;*/
+/*proc freq data=ana.preeclampsia_outc;*/
 /*	table preec_inpt_outc preec_any_outc / missing;*/
 /*run;*/
 /**/
-/*proc means data=preeclampsia_outc nmiss;*/
+/*proc means data=ana.preeclampsia_outc nmiss;*/
 /*	var preec_inpt_dt preec_any_dt;*/
 /*run;*/
 
@@ -231,6 +265,17 @@ Date of capture is important in time-to-event analyses.
 	outds_ps = ps_preec_any_point,
 	outds_surv = surv_preec_any
 	);
+
+
+*Put out the trimmed cohorts for at-risk counts in cumulative incidence figure;
+data ana.preeclampsia_any_trim_1;
+format preec_any_dt MMDDYY10. preec_inpt_dt MMDDYY10.;
+set _anacohort_trim1;
+run;
+data ana.preeclampsia_any_trim_2;
+format preec_any_dt MMDDYY10. preec_inpt_dt MMDDYY10.;
+set _anacohort_trim2;
+run;
 
 
 *Look at the stratified estimates;
