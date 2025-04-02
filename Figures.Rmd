@@ -180,6 +180,11 @@ trim_cohort_lt14 <-  read_sas('/local/projects/marketscan_preg/Latour_23_2322/da
 
 trim_cohort_ge14 <-  read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_cohort_trim_2.sas7bdat')
 
+# Get the cohorts with information on preeclampsia outcome date
+trim_cohort_lt14_pre <-  read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preeclampsia_any_trim_1.sas7bdat')
+
+trim_cohort_ge14_pre <-  read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preeclampsia_any_trim_2.sas7bdat')
+
 
 #FUNCTION: get_loss_counts
 # Get the relevant counts of number of people at-risk for pregnancy loss outcome
@@ -231,6 +236,29 @@ get_ptb_counts <- function(dsn){
   
 }
 
+get_preec_counts <- function(dsn){
+  
+  dsn %>% 
+    mutate(
+      p250 = ifelse(preec_any_dt - dt_index >= 250, 1, 0),
+      p200 = ifelse(preec_any_dt - dt_index >= 200, 1, 0),
+      p150 = ifelse(preec_any_dt - dt_index >= 150, 1, 0),
+      p100 = ifelse(preec_any_dt - dt_index >= 100, 1, 0),
+      p50 = ifelse(preec_any_dt - dt_index >= 50, 1, 0),
+      p0 = ifelse(preec_any_dt - dt_index >= 0, 1, 0)
+    ) %>% 
+    group_by(trt) %>% 
+    summarize(
+      sum0 = sum(p0),
+      sum50 = sum(p50),
+      sum100 = sum(p100),
+      sum150 = sum(p150),
+      sum200 = sum(p200),
+      sum250 = sum(p250)
+    )
+  
+}
+
 
 # Get loss counts
 get_loss_counts(trim_cohort_lt14)
@@ -239,6 +267,12 @@ get_loss_counts(trim_cohort_ge14)
 # Get ptb counts
 get_ptb_counts(trim_cohort_lt14)
 get_ptb_counts(trim_cohort_ge14)
+
+# Get preeclampsia counts (any diagnosis code)
+get_preec_counts(trim_cohort_lt14_pre)
+get_preec_counts(trim_cohort_ge14_pre)
+
+
 
 
 ```
