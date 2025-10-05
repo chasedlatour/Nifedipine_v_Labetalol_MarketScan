@@ -17,7 +17,7 @@ I then derived the cohorts and necessary covariates using the following files:
 Analyses were conducted the the subsequent files:
 - `04_primary_analyses.sas` -- Primary analyses.
 - `04_primary_analyses_noweights.sas` -- Primary analyses, applying no weights and only applying standardized mortality ratio weights.
-- `05_full_bounds_loss.sas` and `_prb.sas` -- Sensitivity analyses constructing the full bounds on the pregnancy loss and preterm birth outcomes if outcomes for all censored pregnancies were missing not at random.
+- `05_full_bounds_loss.sas` and `_ptb.sas` -- Sensitivity analyses constructing the full bounds on the pregnancy loss and preterm birth outcomes if outcomes for all censored pregnancies were missing not at random.
 - `06_enrl_bounds_loss.sas`, `_ptb.sas` and `_ptb_loss.sas` -- Sensitivity analyses leveraging enrollment information to identify pregnancies with outcomes missing not at random. The final program was used to construct those bounds if pregnancy loss was incorporated into the bounds for preterm birth.
 - `07_complete_case.sas` -- Complete case analyses (i.e., only pregnancies with observed outcomes).
 - `08_sens_12gwAtPNC.sas` and `_6gwAtPNC.sas` - Sensitivity analyses where we assumed that censored pregnancies with no gestational age information were 6 weeks' and 12 weeks' gestation at their indexing prenatal encounter.
