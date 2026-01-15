@@ -50,6 +50,7 @@ options mprint;
 /*libname lrxcov slibref=rxcov server=server;*/
 /*libname latc slibref=atc server=server;*/
 /*libname lprojlib slibref=projlib server=server;*/
+/*libname lred slibref=red server=server;*/
 
 /*%inc "/local/projects/marketscan_preg/Latour_23-2322/programs/FormatStatements_CDWH.sas";*/
 
@@ -171,6 +172,18 @@ options mprint;
 
 %simple_dwnld(eclampsia);
 
+
+*******ANEMIA code list;
+%simple_dwnld(anemia);
+
+******GASTROINTESTINAL DISEASE codelist;
+%simple_dwnld(gi_disease);
+
+******PULMONARY HYPERTENSION code list;
+%simple_dwnld(pulmonary_htn);
+
+******FIBROIDS code list;
+%simple_dwnld(fibroids);
 
 
 ********OPIOID USE DISORDER code list;
@@ -572,7 +585,7 @@ proc sql;
 
 *Now stack the datasets;
 proc sql;
-	create table covref.ckd_dx as
+	create table ckd_dx as
 	select min(include) as include, min(codetype) as codetype, code,
 		max(Description) as Description
 	from (
@@ -585,6 +598,15 @@ proc sql;
 	group by code
 	;
 	quit;
+
+*CDL: ADDED 10.27.2025 -- Two codes that were identified in forward-backward mapping should be 
+	excluded. I do this manually here.;
+
+data covref.ckd_dx;
+set ckd_dx;
+	if code = 'E1065' then delete; *Description: Type 1 diabetes mellitus with hyperglycemia;
+	if code = 'E1165' then delete; *Description: Type 2 diabetes mellitus with hyperglycemia;
+run;
 
 
 proc datasets gennum = all;
@@ -931,7 +953,52 @@ run;
 
 **************CONGENITAL HEART DEFECT;
 
-%simple_dwnld(congenital_heart_defect);
+/*%simple_dwnld(congenital_heart_defect);*/
+*CDL: MODIFIED 07.09.2025 -- previously forgot to convert ICD-9 to ICD-10 diagnosis codes. Fixed here.;
+
+
+*Create two SAS datasets: one with the procedure codes and one with the DX-9 diagnosis codes;
+
+data congenital_dx congenital_pr;
+format code $8.;
+length code $8;
+set codelist."congenital_heart_defect"n;
+	if codetype = "DX9" then output congenital_dx;
+		if codetype = "CPT" then output congenital_pr;
+run;
+
+*Forward-backwards GEMSMAP the DX9 codes;
+proc sql noprint;
+	create table icd9_dx_codelist as
+	select distinct a.source as icd9_dx_self
+	from projlib.icd9to10dx as a
+	inner join (select * from congenital_dx where include = 1) as b
+	on a.source = compress(b.code, '.')
+	;
+	quit;
+
+%gemsmap(chd, dx);
+
+*Create final dataset;
+proc sql;
+	create table congenital_heart_defect_dx as
+	select distinct 1 as include, "DX10" as codetype, icd10dx as code, "" as description
+	from chd_dx_fbm_final
+	union select distinct 1 as include, "CPT" as codetype, code as code, "" as description
+	from congenital_pr
+	;
+	quit;
+
+*Remove the P codes then output the final dataset;
+data covref.congenital_heart_defect_dx;
+set congenital_heart_defect_dx;
+	if code in ('P2930' 'P2938') then delete;
+run;
+
+proc datasets gennum = all;
+	delete chd: congenital:;
+run;
+
 
 
 
@@ -1093,9 +1160,13 @@ run;
 
 
 
-**************ADHD MEDICATIONS;
+**************ADHD-RELATED MEDICATIONS;
 
 %simple_med(adhd_meds);
+
+**************ADHD-TREATING STIMULANTS;
+
+%simple_med(adhd_stimulants);
 
 **************PTSD;
 
@@ -1335,31 +1406,63 @@ run;
 
 
 
+**********INDICATED PRETERM BIRTH -- all of these are procedure codes;
 
+%simple_dwnld(ptb_indicated);
 
+**********SPONTANEOUS PRETERM BIRTH -- all of these are diagnosis codes;
 
-
-
-
-
-
+%simple_dwnld(ptb_spontaneous);
 	
 
 
 
+**********ASPIRIN code list;
+
+data aspirin;
+set red.redbook;
+	where find(upcase(GENNME), "ASPIRIN") > 0 
+			and ACTIND = "Y";
+run; 
+
+/*proc freq data=aspirin;*/
+/*	table GENNME STRNGTH ;*/
+/*run;*/
+
+
+data rxcov.LDA_rx rxcov.NSAID_aspirin_rx;
+set aspirin;
+	format ndc9 $9. atc_label $56.;
+
+	ndc9 = substr(ndcnum, 1, 9);
+	atc_label = upcase(gennme);
+
+	if find(upcase(GENNME), "ACETAMINOPHEN") = 0 and find(upcase(GENNME), "OXYCODONE") = 0 
+			and STRNGTH =:  "81 MG" then output rxcov.LDA_rx;
+		else output rxcov.NSAID_aspirin_rx;
+run;
 
 
 
 
 
 
+**********NSAID code list;
 
+data rxcov.nsaid_rx;
+set red.redbook;
+	format ndc9 $9. atc_label $56.;
 
+	where (find(upcase(GENNME), "IBUPROFEN") > 0 or
+			find(upcase(GENNME), "INDOMETHACIN") > 0 or
+			find(upcase(GENNME), "NAPROXEN") > 0 or
+			find(upcase(GENNME), "PIROXICAM") > 0) 
+			and ACTIND = "Y";
 
+	ndc9 = substr(ndcnum, 1, 9);
+	atc_label = upcase(gennme);
+run; 
 
-
-	
-
-
-
-
+proc freq data=rxcov.nsaid_rx;
+	table GENNME ;
+run;

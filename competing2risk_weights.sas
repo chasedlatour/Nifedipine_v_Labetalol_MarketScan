@@ -14,6 +14,21 @@ In addition, this macro is intended to accomodate the following Bootstrap proced
 5. Repeat all the prior steps 2,000 times.
 
 
+IMPORTANT NOTE ON THE INVERSE PROBABILITY OF CENSORING WEIGHTS:
+Generally, when fitting a logistic regression model to address censoring, best practice is to remove intervals during which an individual
+experiences an outcome. However, this creates non-convergence issues in the censoring model when applied in teh context of pregnancy studies.
+This is because everyone must experience _some_ outcome by the end of follow-up. To make concrete the implications of this, consider that follow-up
+is discretized into 5 intervals (as done here), there will be no uncensored individuals who contribute person-time to the 5th interval because they
+will have experienced an outcome by or during that interval. As such, there is no one in the 5th interval from which to predict censoring.
+
+To deal with this, we have decided to not exclude those intervals where individuals experience the positive competing event--example: live birth.
+This derives from the idea that this competing event is included in the model out of statistical necessity to not over-inflate risks, not because
+we are interested in it preventing another outcome. We note that this is an area that needs additional exploration in subsequent work.
+
+This macro is built under the assumption that the last competing event put into the macro is this positive competing event, and the IPCW
+are modeled as such.
+
+
 INPUTS:
 - BOOT = indicator (1=yes, 0=no) as to whether we want to conduct a bootstrap or not.
 - INDS = input dataset name
@@ -23,7 +38,7 @@ INPUTS:
 - OUTCOMEVAR = variable where the outcome is stored
 - EVENT = value(s) of OUTCOMEVAR that represent the study outcome
 - CR1 = value(s) of OUTCOMEVAR that represent competing risk event 1 (previously: CRDT)
-- CR2 = value(s) of OUTCOMEVAR that represent competing risk event 2 (added)
+- CR2 = value(s) of OUTCOMEVAR that represent competing risk event 2 - POSITIVE COMPETING EVENT (e.g., live birth)
 - CENSORDT = variable name for date of censoring event
 - PSVARS = list of variables to be included in the propensity score model (separated by spaces)
 - DOVARS = list of variables to be included in the dropout model (separated by spaces), no interaction terms
@@ -40,6 +55,9 @@ INPUTS:
 - OUTDS_SURV = Name of the output dataset for the cumulative incidence/survival estimates
 - SMR = Indicator (Yes=1/No=0) to include SMR weights in the analysis
 - IPCW = Indicator (Yes=1/No=0) to include IPC weights in the analysis
+
+UPDATES:
+- 12.4.2025 -- Updated the IPCW model to be fit at weekly intervals.
 */
 
 
@@ -407,49 +425,46 @@ INPUTS:
 
 	      	%PUT STEP 4: STABILIZED INVERSE PROBABILITY OF CENSORING WEIGHTS;
 
-			%*Get maximum follow-up over the included pregnancies;
+			%*Get maximum follow-up (in weeks) over the included pregnancies;
 			proc sql noprint;
 				select max(days)
 				into :max_follow
 				from __anacohort&g;
 				quit;
 
-			%*Get the quintiles of censor times;
-	      	proc univariate data=__anacohort&g noprint; 
-				where combined=0; 
-				var days; *Previously not trimmed.;
-	         	output out=_quintiles pctlpts=20 40 60 80 pctlpre=p; 
-			run;
-	      	data _null_; 
-			set _quintiles; 
-	         	call symputx('p20', p20); 
-				call symputx('p40', p40); 
-				call symputx('p60', p60); 
-				call symputx('p80', p80); 
-			run;
-
+			%*CDL: REVISED 12.4.2025 to discretize weekly;
 			data ___anacohort&g; 
 			set __anacohort&g(rename=(days=days1 outcome=outcome1 comprisk1=comprisk11 comprisk2=comprisk21 combined=combined1));
-	         	array j{6} j1-j6 (0, &p20, &p40, &p60, &p80, &max_follow);
-	         	do k=1 to 5;
-	            	in=j(k);
-	            	if j(k)<days1<=j(k+1) then do; 
-						days=days1; 
-						if combined1=0 then drop=1; 
-							else drop=0; 
-						outcome=outcome1; 
-						comprisk1=comprisk11; 
-						comprisk2=comprisk21;
-						combined=combined1; 
-						output; 
+
+				%*Make sure there are no 0 days values;
+				if days1 = 0 then days1 = 0.001;
+
+				cat = ceil(ceil(days1)/7); *Round up by week;
+
+				%*Now create a long dataset where each row represents a week of follow-up for each person;
+				do j=1 to cat;
+
+					%*Create the start time for the 1-week interval;
+					in = (j-1) * 7; %*start of the interval;
+
+					if in < days1 and days1 <= j*7 then do;
+						days = days1;
+						if combined1 = 0 then drop=1;
+							else drop=0;
+						outcome = outcome1;
+						comprisk1 = comprisk11;
+						comprisk2 = comprisk21;
+						combined = combined1;
 					end;
-	            	else if j(k+1)<days1 then do; 
-						days=j(k+1); 
-						drop=0; 
-						outcome=0; comprisk1=0; comprisk2=0; combined=0; 
-						output; 
+					else do;
+						days = j*7;
+						drop = 0;
+						outcome=0; comprisk1=0; comprisk2=0; combined=0;
 					end;
-	         	end;
+					output;
+
+				end;
+
 	         	keep _id in days outcome comprisk1 comprisk2 combined drop expwgt &trtvar &dovars;
 	      	run;
 
@@ -462,13 +477,17 @@ INPUTS:
 
 			%*Now fit the pooled logistic regressions to fit the stabilized inverse probability of censoring weights;
 	     	proc logistic data=___anacohort&g noprint; 
-				class in &doclassvars / param=ref;
-	        	model drop = &trtvar in; 
+				where combined = 0 ; %*CDL: ADDED 6.09.2025 -- Pooled logistic regression not supposed to be fit on events.;
+				effect spl = spline(in / details naturalcubic basis=tpf(noint) knotmethod=percentiles(5)); %*CDL: ADDED 12.4.2025 restricted cubic spline;
+				class &doclassvars / param=ref; %*CDL: REMOVED in from class statement because will not converge;
+	        	model drop = &trtvar spl; 
 				output out=num(keep=_id in dn) p=dn; 
 			run;
 	      	proc logistic data=___anacohort&g noprint; 
-				class in &doclassvars / param=ref;
-	        	model drop = &trtvar in &dovarsmodel; 
+				where combined = 0 ; %*CDL: ADDED 6.09.2025 -- Pooled logistic regression not supposed to be fit on events.;
+				effect spl = spline(in / details naturalcubic basis=tpf(noint) knotmethod=percentiles(5)); %*CDL: ADDED 12.4.2025 restricted cubic spline;
+				class &doclassvars / param=ref; %*CDL: REMOVED in from class statement because will not converge;
+	        	model drop = &trtvar spl &dovarsmodel; 
 				output out=denom(keep=_id in dd) p=dd; 
 			run;
 
@@ -492,12 +511,13 @@ INPUTS:
 
 	         	lastNum=dn; 
 				lastDenom=dd;
-				%IF &ipcw = 1 %THEN %DO;
-		         	dowgt = num / denom;
-				%END;
-				%ELSE %DO;
-					dowgt = 1;
-				%END;
+				dowgt = num / denom;
+/*				%IF &ipcw = 1 %THEN %DO;*/
+/*		         	dowgt = num / denom;*/
+/*				%END;*/
+/*				%ELSE %DO;*/
+/*					dowgt = 1;*/
+/*				%END;*/
 				wgt = expwgt * dowgt;
 	         	keep _id &trtvar in days outcome comprisk1 comprisk2 combined wgt dowgt;
 	     	run;
@@ -508,7 +528,7 @@ INPUTS:
 				run; quit;
 			%END;
 
-	      	%PUT STEP 5: RUN ANALYSIS; %*CDL: COME BACK;
+	      	%PUT STEP 5: RUN ANALYSIS;
 	      	
 /* 	      	%*AJ code from Steve Cole, Cannot accomodate IPCW; */
 /* 	      	proc phreg data=__anacohort&g noprint; */

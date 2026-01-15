@@ -2,11 +2,12 @@
 PROGRAM: 03_derive_covariates.sas
 PROGRAMMER: Chase Latour
 PURPOSE: To derive covariates necessary for the analyses
-	
-Goal: 
-Output data: 
 
 Date: 12.19.2024
+
+Updates:
+	- 12.4.2025 - CDL: Added additional covariates that derived for revisions (anemia, GI disease, other HTN disorders, uterine fibroids, 
+					   aspirin, anti-inflammatory medications
 ********************************************************************************************************************************************/
 
 
@@ -98,7 +99,7 @@ OUTPUT_DATA -- output dataset of pregnancies
 		%*Create a year indicator for index date;
 		year_index = year(dt_index);
 		year_index_numeric = year(dt_index);
-		
+		%*Binary indicator for index date;
 		if year(dt_index) <= 2019 then year_le2019 = 1;
 			else year_le2019 = 0;
 
@@ -164,20 +165,28 @@ OUTPUT_DATA -- output dataset of pregnancies
 
 		%*****Diabetes -- derive the initial indicator here;
 		
-		%*Using only pre-index information;
-		if dx_DiabetesOutptPre >= 2 then any_diabetes_pre = 1;
-			else if dx_DiabetesInptpre >= 1 then any_diabetes_pre = 1;
-			else if (dx_DiabetesOutptPre >= 1) and 
+		%*Using only pre-index information; 
+		%*CDL: REVISED 11.16.2025 because indicator was supposed to be at least 2 codes of any types on different dates;
+		if sum(dx_DiabDMge141idx, dx_DiabDMle140idx) >= 2 then any_diabetes_pre = 1;
+/*		if dx_DiabetesOutptPre >= 2 then any_diabetes_pre = 1;*/
+/*			else if dx_DiabetesInptpre >= 1 then any_diabetes_pre = 1;*/
+		*CDL: FIXED below code on 1.15.2026 so that referencing the same counts.;
+/*			else if sum(dx_DiabetesOutptPre, dx_DiabetesInptpre) >= 1 and */
+			else if sum(dx_DiabDMge141idx, dx_DiabDMle140idx) >= 1 and 
 					sum(rx_t2dmPre, rx_t1t2dmpre)>= 1 then any_diabetes_pre = 1;
 			else if sum(rx_t2dmpre, rx_t1t2dmpre)>= 2 then any_diabetes_pre = 1;
 			else any_diabetes_pre = 0;
 
-		%*Including post-index information;
-		if any_diabetes_pre_dx = 1 then any_diabetes_post = 1;
-			else if sum(dx_DiabetesOutptPre, dx_DiabetesOutptPost) >= 2 then any_diabetes_post = 1;
-			else if dx_DiabetesInptPost >= 1 then any_diabetes_post = 1;
-			else if sum(dx_DiabetesOutptPre, dx_DiabetesOutptPost) >= 1 and 
+		%*Including post-index information; 
+		%*CDL: REVISED 11.16.2025 because indicator was supposed to be at least 2 codes of any types on different dates;
+		if sum(dx_DiabDMge141idx30, dx_DiabDMle140idx30) >= 2 then any_diabetes_post = 1;
+			else if sum(dx_DiabDMge141idx30, dx_DiabDMle140idx30) >= 1 and 
 					sum(rx_t2dmPre, rx_t2dmPos, rx_t1t2dmpre, rx_t1t2dmpos) >= 1 then any_diabetes_post = 1;
+/*		if any_diabetes_pre_dx = 1 then any_diabetes_post = 1;*/
+/*			else if dx_DiabetesInptPost >= 1 then any_diabetes_post = 1;*/
+/*			else if sum(dx_DiabetesOutptPre, dx_DiabetesOutptPost) >= 2 then any_diabetes_post = 1;*/
+/*			else if sum(dx_DiabetesOutptPre, dx_DiabetesOutptPost) >= 1 and */
+/*					sum(rx_t2dmPre, rx_t2dmPos, rx_t1t2dmpre, rx_t1t2dmpos) >= 1 then any_diabetes_post = 1;*/
 			else if sum(rx_t2dmpre, rx_t2dmpos, rx_t1t2dmpre, rx_t1t2dmpos) >= 2 then any_diabetes_post = 1;
 			else any_diabetes_post = 0;
 			
@@ -378,9 +387,13 @@ LMPINDEX - Assumed GA at the indexing prenatal encounter
 		%if &suffix = NA %then %do;
 			out.preg_cohort_&lmpindex._&lookbackdt._&lookbackdays;
 		%end;
-		%else %do;
-			out.cohort_&lmpindex._&lookbackdt._&lookbackdays._&suffix;
-		%end;
+			%*CDL: ADDED;
+			%else %if &suffix = DEL %then %do;
+				out.preg_del_cohort_&lmpindex._&lookbackdt._&lookbackdays;
+			%end;
+			%else %do;
+				out.cohort_&lmpindex._&lookbackdt._&lookbackdays._&suffix;
+			%end;
 	run;
 	
 /* 	%*Temporary; */
@@ -461,10 +474,11 @@ LMPINDEX - Assumed GA at the indexing prenatal encounter
 	run;
 
 
-	%let one_dx = alc othersud RecurLos ckd obesity Bipolar Schizo;
+	%let one_dx = alc othersud RecurLos ckd obesity Bipolar Schizo fibroids gidiseas pulmonar anemia;
 	%let num_one_dx = %sysfunc(countw(&one_dx));
 
-	%let one_rx = t2dm t1t2dm metfor HyperThy HypoThy terat statin benzo antidep anticonvul MoodStab adhd PTSD Antipsy glp1wgt otherwgt;
+	%*CDL: ADDED simulant 4.24.2025 -- NOTE stimulant was mispelled as simulant in the original coding and so retain that error here.;
+	%let one_rx = t2dm t1t2dm metfor HyperThy HypoThy terat statin benzo antidep anticonvul MoodStab adhd simulant PTSD Antipsy glp1wgt otherwgt lda nsaid aspirin;
 	%let num_one_rx = %sysfunc(countw(&one_rx));
 
 	%let two_out_one_in = retino Antiphos Lupus HyperThy HypoThy depressi PTSD Athero PeriVasc Anemia SickleT SickleD;
@@ -853,13 +867,13 @@ LMPINDEX - Assumed GA at the indexing prenatal encounter
 %mend;
 
 
+
 %*Run the analysis;
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=63, SUFFIX=NA);
 %identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=63, SUFFIX=NA);
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=42, SUFFIX=NA);
-/*%identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=42, SUFFIX=NA);*/
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=84, SUFFIX=NA);
-/*%identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=84, SUFFIX=NA);*/
+%identify_variables(LOOKBACKDT=dt_lmp, LOOKBACKDAYS=180, LMPINDEX=63, SUFFIX=DEL);
 
 %*Applying the 3-week window around the LMP;
 %identify_variables(LOOKBACKDT=dt_index, LOOKBACKDAYS=270, LMPINDEX=63, SUFFIX=m21);

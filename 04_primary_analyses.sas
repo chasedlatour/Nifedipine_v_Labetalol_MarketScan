@@ -56,7 +56,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=04_primary_analyses, savelog=N);
+%setup(sample=full, programname=04_primary_analyses, savelog=Y);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/
@@ -65,6 +65,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*libname lwork slibref=work server=server;*/
 /*libname ltemp slibref=temp server=server;*/
 /*libname lexpref slibref=expref server=server;*/
+/*libname lcovref slibref=covref server=server;*/
 
 
 *Create formats;
@@ -98,6 +99,13 @@ proc format;
 		. = "Unknown"
 		0 = "Metropolitan area"
 		1 = "Rural area";
+	/*CDL: ADDED region 1.5.2026*/
+	value $region
+		"1" = "Northeast"
+		"2" = "North Central"
+		"3" = "South"
+		"4" = "West"
+		"5" = "Unknown";
 run;
 
 
@@ -142,6 +150,25 @@ proc sql noprint;
 
 
 
+/*CDL: 11.16.2025 -- ADDED the below delete statement*/
+%*If someone had an outcome on the SAME date as their indexing fill, then remove the pregnancy. This is only the case for
+observed pregnancy outcomes;
+data pregnancies_outc;
+set pregnancies_enr;
+	if preg_outcome_clean ne 'UNK' and dt_gapreg = dt_index then delete;
+run;
+
+*Get counts for the number of these pregnancies;
+proc sql noprint;
+	select sum(preg_outcome_clean ne 'UNK' and dt_gapreg = dt_index)
+	into :num_outcome_index
+	from pregnancies_enr
+	;
+	quit;
+%put Number of pregnancies with observed outcomes that occurred on the index date: &num_outcome_index;
+
+
+
 %*Now get counts for the rest of the exclusion criteria;
 proc sql noprint;
 	select sum(age_at_index < 18), sum(asthma_pre = 1), 
@@ -152,7 +179,7 @@ proc sql noprint;
 				sum(retino_pre = 1), sum(antiphos_pre = 1), sum(lupus_pre = 1), sum(sickled_pre = 1)
 	into :num_preg_less18, :num_preg_asthma, :num_heart_disease, :num_cancer, :num_em, :num_cvd, :num_retino,
 			:num_antiphos, :num_lupus, :num_sickled
-	from pregnancies_enr;
+	from pregnancies_outc;
 	quit;
 %put Number of pregnancies where person was <18 years of age: &num_preg_less18;
 %put Number of pregnancies where person had asthma: &num_preg_asthma;
@@ -168,7 +195,7 @@ proc sql noprint;
 
 %*Remove individuals that meet any of those criteria;
 data pregnancies_excl;
-set pregnancies_enr;
+set pregnancies_outc;
 	if age_at_index < 18 or 
 			sum(asthma_pre, coronary_heart_disease_pre, arrhythmia_pre, congenital_heart_pre, endocarditis_pre,
 			myopericarditis_pre, heartfailure_pre, heart_valve_disease_pre, cardiomyopathy_pre, other_heart_disease_pre, cancer_pre,
@@ -239,7 +266,8 @@ set ana.primary_cohort;
 			rural unknown.
 			diabetes_type_post $diabetes.
 			diabetes_simp $simpdiab.
-			dt_gapreg_ptb MMDDYY10.;
+			dt_gapreg_ptb MMDDYY10.
+			region $region.;
 			
 	label ga_index_days = "Gestational age (days) at index date"
 		ga_index_lt14 = "Gestational age <14wks at index date"
@@ -270,6 +298,7 @@ set ana.primary_cohort;
 		antideprx_post = "Antidepressants"
 		adhd_post = "ADHD"
 		adhdrx_post = "ADHD medications"
+		simulantrx_post = "ADHD-treating stimulants"
 		bipolar_post = "Bipolar disorder diagnosis"
 		moodstabrx_post = "Mood stabilizer fills"
 		bipolar_trt_post = "Bipolar disorder diagnosis and medication"
@@ -289,6 +318,7 @@ set ana.primary_cohort;
 		diabetes_simp = "Type of diabetes"
 		chronichypertension_pre = "Chronic hypertension"
 		preeclampsia_pre = "Preeclampsia"
+		region = "Region at index date"
 		;
 
 	*First, just combine 2016 and 2017;
@@ -336,6 +366,13 @@ set ana.primary_cohort;
 
 	if preg_outcome_ptb = 'TB' then dt_gapreg_ptb = dt_lmp + 258; /*36*7+6 = 258 -- They have a non-event at the end of the risk period*/
 		else dt_gapreg_ptb = dt_gapreg;
+
+	*Only 13 with unknown region. Group these into the largest category;
+	if region_at_index = 5 then region = '5';
+		else if region_at_index = 1 then region = '1';
+		else if region_at_index = 2 then region = '2';
+		else if region_at_index = 3 then region = '3';
+		else if region_at_index = 4 then region = '4';
 	
 run;
 
@@ -349,6 +386,9 @@ set ana.primary_cohort;
 		else if age_at_index <= 34 then age_at_index_cat = "30-34";
 		else if age_at_index <= 39 then age_at_index_cat = "35-39";
 		else age_at_index_cat = ">= 40";
+
+	if age_at_index >= 35 then age_at_index_ge35 = 1;
+		else age_at_index_ge35 = 0;
 
 	*Make a variable that is any antidiabetic;
 	if t2dmrx_post = 1 or t1t2dmrx_post = 1 or metforrx_post = 1 then any_antidiabeticrx_post = 1;
@@ -449,7 +489,9 @@ set pregnancies_antidiabetics;
 run;
 
 
-
+proc freq data=ana.primary_cohort;
+	table preg_outcome_clean / missing;
+run;
 
 
 
@@ -466,15 +508,17 @@ run;
 
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = ana.primary_cohort, colVar = exposure,
-	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+	rowVars = year_index year_index2017 year_le2019 region ga_index_lt14 age_at_index_cat age_at_index_ge35 rural numOutptPNC_lt3 numInptADM_gt1	
 		chronichypertension_pre preeclampsia_pre
 		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
 		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
 		ptsd_post schizo_post hyperlip_post   
+		anemia_post fibroids_post gidiseas_post pulmonar_post
 		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
 		sglt2_post sulfonylureas_post thiaz_post  
 		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
-		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		/*adhdrx_post*/ simulantrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		statinrx_post ldarx_pre nsaidrx_pre aspirinrx_pre
 		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Primary cohort overall without weights,
 	title = Table 1: Primary cohort);
@@ -493,30 +537,34 @@ run;
 
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_lt14, colVar = exposure,
-	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+	rowVars = year_index year_index2017 year_le2019 region ga_index_lt14 age_at_index_cat age_at_index_ge35 rural numOutptPNC_lt3 numInptADM_gt1	
 		chronichypertension_pre preeclampsia_pre
 		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
 		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
 		ptsd_post schizo_post hyperlip_post   
+		anemia_post fibroids_post gidiseas_post pulmonar_post
 		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
 		sglt2_post sulfonylureas_post thiaz_post  
 		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
-		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		/*adhdrx_post*/ simulantrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		statinrx_post ldarx_pre nsaidrx_pre aspirinrx_pre
 		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Unweighted primary cohort GA lt 14wk,
 	title = Table 1: Primary cohort where GA less than 14w at index);
 	
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_ge14, colVar = exposure,
-	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+	rowVars = year_index year_index2017 year_le2019 region ga_index_lt14 age_at_index_cat age_at_index_ge35 rural numOutptPNC_lt3 numInptADM_gt1	
 		chronichypertension_pre preeclampsia_pre
 		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
 		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
 		ptsd_post schizo_post hyperlip_post   
+		anemia_post fibroids_post gidiseas_post pulmonar_post
 		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
 		sglt2_post sulfonylureas_post thiaz_post  
 		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
-		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		/*adhdrx_post*/ simulantrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		statinrx_post ldarx_pre nsaidrx_pre aspirinrx_pre
 		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Unweighted primary cohort GA ge 14wk,
 	title = Table 1: Primary cohort where GA less than 14w at index);
@@ -645,30 +693,34 @@ run;
 
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_lt14, colVar = exposure, wgtvar=smrw,
-	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+	rowVars = year_index year_index2017 year_le2019 region ga_index_lt14 age_at_index_cat age_at_index_ge35 rural numOutptPNC_lt3 numInptADM_gt1	
 		chronichypertension_pre preeclampsia_pre
 		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
 		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
 		ptsd_post schizo_post hyperlip_post   
+		anemia_post fibroids_post gidiseas_post pulmonar_post
 		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
 		sglt2_post sulfonylureas_post thiaz_post  
 		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
-		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		/*adhdrx_post*/ simulantrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		statinrx_post ldarx_pre nsaidrx_pre aspirinrx_pre
 		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Weighted primary cohort lt 14w,
 	title = Table 1: Primary cohort where GA less than 14w at index);
 	
 %*Now do some table 1 descriptives of the cohort - ana.primary_cohort;
 %table1(inds = primary_ge14, colVar = exposure, wgtvar=smrw,
-	rowVars = year_index year_le2019  ga_index_lt14 age_at_index_cat rural numOutptPNC_lt3 numInptADM_gt1	
+	rowVars = year_index year_index2017 year_le2019 region ga_index_lt14 age_at_index_cat age_at_index_ge35 rural numOutptPNC_lt3 numInptADM_gt1	
 		chronichypertension_pre preeclampsia_pre
 		substance_use_pre nausea_pre pregestation_diab_post obesity_post migraine_pre recurlos_pre ckd_post 
 		thyroid_disorder_post depressi_post anxiety_post adhd_post bipolar_post 
 		ptsd_post schizo_post hyperlip_post   
+		anemia_post fibroids_post gidiseas_post pulmonar_post
 		any_antidiabeticrx_post alpha_glucosidase_post dpp4i_post glp1_post insulin_post metformin_post
 		sglt2_post sulfonylureas_post thiaz_post  
 		glp1wgtrx_post otherwgtrx_post thyroidrx_post antideprx_post
-		adhdrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		/*adhdrx_post*/ simulantrx_post moodstabrx_post antipsyrx_post teratrx_pre benzorx_post anticonvulrx_post
+		statinrx_post ldarx_pre nsaidrx_pre aspirinrx_pre
 		ga_index_days age_at_index num_OutptPNC num_InptAdm,
 	outfile = Table 1: Weighted primary cohort ge 14w,
 	title = Table 1: Primary cohort where GA at least 14w at index);
@@ -860,7 +912,7 @@ run;
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
 	trtvar=trt, 
-	numiterations=1000,
+	numiterations=1000, 
 	initialseed=23244, 
 	outds=ana.primary_boot,
 	outds_dist=ga_dist_primary_boot,
@@ -1030,7 +1082,7 @@ run;
 			nausea_pre recurlos_pre obesity_post chronichypertension_pre
 			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
 	trtvar=trt,
-	numiterations=1000,
+	numiterations=1000, 
 	initialseed=23244, 
 	outds=ana.primary_boot_ptb,
 	outds_dist=ga_dist_primary_boot_ptb,
@@ -1074,7 +1126,18 @@ options mlogic mprint symbolgen notes;
 
 															05 - AD-HOC DESCRIPTIVES
 
+Analayses:
+05a -- Provide descriptives on pregnancies with unknown outcomes
+05b -- Explore how many preterm births have ptb codes;
+05c -- Explore indicated preterm birth
+05d -- Look at the distribution of indexing dates.
+
 ********************************************************************************************************************************************/
+
+
+/********************************
+05a -- Provide descriptives on pregnancies with unknown outcomes
+********************************/
 
 ******Identify the number of pregnancies with UNK outcomes;
 
@@ -1091,28 +1154,24 @@ proc sql;
 
 
 **********************************
-	Look at the pregnancies with UNK outcomes;
-
-*****PREGANNCY LOSS;
+	Look at the pregnancies with UNK outcomes -- first focus on analyses for pregnancy loss;
 
 data enroll_loss;
 set ana.primary_cohort;
 
-	days_disenroll = dt_disenroll_post_any - dt_gapreg;
-	daysg31 = days_disenroll > 31;
+	days_disenroll = dt_disenroll_post_any - dt_gapreg; *Calculate the number of days after their LTFU date that they disenrolled;
+	daysg31 = days_disenroll > 31; *Aligns with sensitivity analysis;
 
-	ga_at_end = (dt_gapreg -  dt_lmp)/7;
-	ga_at_index = (dt_index - dt_lmp)/7;
+	ga_at_end = (dt_gapreg -  dt_lmp)/7; *Gestational age at end of pregnancy;
+	ga_at_index = (dt_index - dt_lmp)/7; *Gestational age at index date;
 
 run;
 
-****UNK Counts;
-
+****UNK Counts by treatment;
 proc sort data=enroll_loss;
 	by trt;
 run;
-
-*Overall cohort;
+****Overall cohort -- get counts by outcome;
 proc freq data=enroll_loss;
 	by trt;
 	table daysg31*preg_outcome_clean;
@@ -1123,7 +1182,6 @@ proc freq data=enroll_loss (where = (ga_index_cat = 1));
 	by trt;
 	table daysg31*preg_outcome_clean;
 run;
-
 *GA at index: >=14 w;
 proc freq data=enroll_loss (where = (ga_index_cat = 2));
 	by trt;
@@ -1131,16 +1189,12 @@ proc freq data=enroll_loss (where = (ga_index_cat = 2));
 run;
 
 ****GA stats;
-
 *Overall cohort;
 proc means data=enroll_loss (where = (preg_outcome_clean = 'UNK')) median p25 p75;
 	class trt daysg31;
 	var ga_at_index ga_at_end;
 run;
-
 *Stratified by gestational age at index;
-
-*Overall cohort;
 proc means data=enroll_loss (where = (preg_outcome_clean = 'UNK')) median p25 p75;
 	class trt ga_index_cat daysg31;
 	var ga_at_index ga_at_end;
@@ -1149,7 +1203,6 @@ run;
 
 
 **Make figures;
-
 * Gestational age at index among nifedipine initiators in the overall cohort;
 proc sort data=enroll_loss (where=(trt = 1 and preg_outcome_clean = 'UNK')) out=sort_nif; 
 	by daysg31; 
@@ -1172,10 +1225,6 @@ proc sgplot data=sort_nif;
     xaxis label="Gestational Age at Index (Weeks)";
     styleattrs datacolors=(navy darkgoldenrod) datacontrastcolors=(navy darkgoldenrod);
 run;
-
-
-
-
 
 * Gestational age at index among labetalol initiators in the overall cohort;
 proc sort data=enroll_loss (where=(trt = 0 and preg_outcome_clean = 'UNK')) out=sort_lab; 
@@ -1203,9 +1252,10 @@ run;
 
 
 
-
-
-*****PRETERM BIRTH;
+**********************************
+	Look at the pregnancies with UNK outcomes -- first focus on analyses for preterm birth.
+	This may be different because not all pregnancies wtih UNK outcomes are censored in PTB analyses if they
+	survive 37 weeks gestation (i.e., term birth).;
 
 data enroll_ptb;
 set ana.primary_cohort;
@@ -1219,23 +1269,21 @@ set ana.primary_cohort;
 run;
 
 ****UNK Counts;
-
 proc sort data=enroll_ptb;
 	by trt;
 run;
-
 *Overall cohort;
 proc freq data=enroll_ptb;
 	by trt;
 	table daysg31*preg_outcome_ptb;
 run;
 
+*Counts by outcome, stratified by GA at index;
 *GA at index: <14 w;
 proc freq data=enroll_ptb (where = (ga_index_cat = 1));
 	by trt;
 	table daysg31*preg_outcome_ptb;
 run;
-
 *GA at index: >=14 w;
 proc freq data=enroll_ptb (where = (ga_index_cat = 2));
 	by trt;
@@ -1243,16 +1291,12 @@ proc freq data=enroll_ptb (where = (ga_index_cat = 2));
 run;
 
 ****GA stats;
-
 *Overall cohort;
 proc means data=enroll_ptb (where = (preg_outcome_ptb = 'UNK')) median p25 p75;
 	class trt daysg31;
 	var ga_at_index ga_at_end;
 run;
-
 *Stratified by gestational age at index;
-
-*Overall cohort;
 proc means data=enroll_ptb (where = (preg_outcome_ptb = 'UNK')) median p25 p75;
 	class trt ga_index_cat daysg31;
 	var ga_at_index ga_at_end;
@@ -1260,8 +1304,12 @@ run;
 
 
 
-******
-	Explore how many preterm births have ptb codes;
+
+
+
+
+**********
+	05b - Explore how many preterm births have ptb codes;
 
 data ptb;
 set ana.primary_cohort;
@@ -1278,7 +1326,6 @@ proc sql;
 	quit;
 
 *Assign a hierarchy based on our algorithms hierarchy;
-
 proc sql;
 	create table ptb_ga2 as
 	select distinct enrolid, idxpren, dt_lmp, dt_gapreg, dt_indexprenatal, preg_outcome_ptb, 
@@ -1292,9 +1339,11 @@ proc sql;
 	;
 	quit;
 
+*Output frequency stats on codes used to assign PTB;
 proc freq data=ptb_ga2 (where = ( preg_outcome_ptb = "PTB"));
 	table hierarchy preterm / missing;
 run;
+*>97% have a Z3A code, and half have a PTB code;
 
 *Look at the gestational ages represented by specific GA codes for preterm births;
 data ptb_ga3;
@@ -1304,7 +1353,6 @@ set ptb_ga;
 	gest_age_weeks = gestational_age_days / 7;
 run;
 
-
 proc means data=ptb_ga3 min p10 p25 p50 p75 p90 max;
 	var gest_age_weeks;
 run;
@@ -1312,42 +1360,159 @@ run;
 
 
 
-/********************************************************************************************
 
-Look at post-index antihypertensive use
 
-*********************************************************************************************/
 
-data primary_cohort;
+
+
+
+**********
+	05c - Explore indicated preterm birth;
+
+data ptb;
 set ana.primary_cohort;
+	where preg_outcome_ptb ne "UNK"; *Conduct a CCA;
+
+	if preg_outcome_ptb = "PTB" and (indptb_Inptpre = 1 or indptb_Inptpre = 1 or indptb_Outptpre = 1 or indptb_Outptpos = 1) 
+			then indicated_ptb = 1;
+		else indicated_ptb = 0;
+
+run;
+	
+proc freq data=ptb;
+	table trt * indicated_ptb / missing;
 run;
 
-*Look at the number with a non-exposure antihypertensive after the index date;
-data primary_cohort;
-set primary_cohort;
 
-	*Create a binary variable for filling a medication other than the exposure after the index date;
-	if dt_first_nonexp_antihtn ne . then nonexp_antihtn_binary = 1;
-		else nonexp_antihtn_binary = 0;
 
-	*Indicator for a gap in exposure fills, using 7 day grace period;
-	if dt_lastfill_daysupp_gap7 < dt_gapreg then gap7 = 1;
-		else gap7 = 0;
+%*********************************
+	Describe the pregnancy outcome distribution in the overall cohort;
 
-	*Indicator for a gap in exposure fills, using 30 day grace period;
-	if dt_lastfill_daysupp_gap30 < dt_gapreg then gap30 = 1;
-		else gap30 = 0;
+data outcomes;
+set ana.primary_cohort;
+
+	if preg_outcome_clean in ('LBM' 'LBS' 'UDL') then outcome = "Live birth";
+		else if preg_outcome_clean in ('SAB' 'UAB' 'SB' 'MLS') then outcome = "Loss";
+		else if preg_outcome_clean = "IAB" then outcome = "abortion";
+		else if preg_outcome_clean = "UNK" then outcome = "unknown";
+
+run;
+
+proc freq data=outcomes;
+	table trt*outcome / missing;
+run;
+
+
+
+%*********************************
+	Investigate whether bootstrapped estimates are normally distributed for Wald-type confidence intervals;
+
+
+%*Pregnancy loss first -- want to combine the stratified estimates into their estimates in the overall population, 
+but we still want 1,000 estimates;
+
+%combine_boot_estimates(
+			inputEst= ana.primary_boot, 
+			inputDist= ana.ga_dist_primary_boot,
+			numStrata= 2, 
+			output_stratified= ana.primary_boot_strat,
+			output_overall= ana.primary_boot_overall);
+
+%*Dataset with all the standardized estimates: primary_combined2
+Log-transform the risk ratios;
+data primary_combined2;
+set primary_combined2;
+	lnrr = log(rr);
+run;
+
+%macro output_dist(estimate= , outcome=);
+
+	%*Output a histogram with the statistics;
+	ods graphics on / reset imagename="&estimate Distribution - &outcome";
+	proc sgplot data=primary_combined2;
+		title "Distribution of the &estimate for &outcome across the bootstraps";
+		histogram &estimate ;
+	run;
+
+	%*Output the 2.5th and 97.5th percentiles to check comparisons;
+	proc univariate data=primary_combined2 noprint;
+		var &estimate;
+		output out=&estimate pctlpre=P_ pctlpts=2.5 97.5;
+	run;
+
+%mend;
+
+%output_dist(estimate=risk0, outcome= Pregnancy Loss);
+%output_dist(estimate=risk1, outcome= Pregnancy Loss);
+%output_dist(estimate=rd, outcome= Pregnancy Loss);
+%output_dist(estimate=lnrr, outcome= Pregnancy Loss);
+
+
+
+
+%*Preterm birth;
+
+%combine_boot_estimates(
+			inputEst= ana.primary_boot_ptb,
+			inputDist= ana.ga_dist_primary_boot_ptb,
+			numStrata= 2, 
+			output_stratified= ana.primary_ptb_boot_strat,
+			output_overall= ana.primary_ptb_boot_overall);
+
+%*Dataset with all the standardized estimates: primary_combined2
+Log-transform the risk ratios;
+data primary_combined2;
+set primary_combined2;
+	lnrr = log(rr);
+run;
+
+%output_dist(estimate=risk0, outcome= Preterm Birth);
+%output_dist(estimate=risk1, outcome= Preterm Birth);
+%output_dist(estimate=rd, outcome= Preterm Birth);
+%output_dist(estimate=lnrr, outcome= Preterm Birth);
+
+
+
+
+
+
+
+
+
+
+**********
+		05d -- Look at the distribution of indexing dates.;
+
+
+%*First, look at the weekly distribution of dt_index -- the index date into the cohort;
+
+data dt_index;
+set ana.primary_cohort;
+	
+	ga_index = dt_index - dt_lmp;
+
+	ga_index_week = floor(ga_index / 7);
+
+run;
+
+proc freq data=dt_index;
+	table ga_index_week/ missing;
+run;
+*Does not look particularly odd;
+
+
+*Second, look at the weekly distribution of dt_indexprenatal -- the first claim with evidence of prenatal care;
+
+data dt_pnc;
+set ana.primary_cohort;
+	
+	ga_pnc = dt_indexprenatal - dt_lmp;
+	ga_pnc_week = floor(ga_pnc / 7);
 	
 run;
 
-proc freq data=primary_cohort;
-	table trt*nonexp_antihtn_binary trt*gap30 / missing;
+proc freq data=dt_pnc;
+	table ga_pnc_week / missing;
 run;
 
 
-
-
-*How many have GA <12 weeks gestation;
-proc freq data=ana.primary_cohort (where = (ga_at_index < 84));
-	table trt;
-run;

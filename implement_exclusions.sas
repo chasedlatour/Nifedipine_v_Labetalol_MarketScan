@@ -30,10 +30,18 @@ INPUT:
 		where prior_enrollment_rx >= 270;
 	run;
 
+	/*CDL: 11.16.2025 -- ADDED the below delete statement*/
+	%*If someone had an outcome on the SAME date as their indexing fill, then remove the pregnancy. This is only the case for
+	observed pregnancy outcomes;
+	data pregnancies_outc;
+	set pregnancies_enr;
+		if preg_outcome_clean ne 'UNK' and dt_gapreg = dt_index then delete;
+	run;
+
 
 	%*Remove individuals that meet any of the exclusion criteria;
 	data pregnancies_excl;
-	set pregnancies_enr;
+	set pregnancies_outc;
 		if age_at_index < 18 or 
 				sum(asthma_pre, coronary_heart_disease_pre, arrhythmia_pre, congenital_heart_pre, endocarditis_pre,
 				myopericarditis_pre, heartfailure_pre, heart_valve_disease_pre, cardiomyopathy_pre, other_heart_disease_pre, cancer_pre,

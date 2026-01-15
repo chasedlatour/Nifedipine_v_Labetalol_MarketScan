@@ -53,6 +53,16 @@ PURPOSE: To re-run the steps of the primary analysis among some prespecified sub
 	%put Number of pregnancies with qualifying enrollment: &num_preg_enr ;
 	%put Number of pregnancies without qualifying enrolllment: %eval(&num_preg - &num_preg_enr );
 
+	%*CDL: ADDED 11.16.2025
+	Exclude those with observed outcomes that occurred on the index date;
+	data pregnancies_outc;
+	set pregnancies_enr;
+		if preg_outcome_clean = "UNK" and dt_gapreg = dt_index then delete;
+	run;
+	%*Get count;
+	proc sql notprint; select count(preg_outcome_clean = "UNK" and dt_gapreg = dt_index) into :num_outc from pregnancies_outc; quit;
+	%put Number of pregnancies with observed outcome on the index date: &num_outc;
+
 	%*Now get counts for the rest of the exclusion criteria;
 	proc sql noprint;
 		select sum(age_at_index < 18), sum(asthma_pre = 1), 
@@ -78,7 +88,7 @@ PURPOSE: To re-run the steps of the primary analysis among some prespecified sub
 
 	%*Remove individuals that meet any of those criteria;
 	data pregnancies_excl;
-	set pregnancies_enr;
+	set pregnancies_outc;
 		if age_at_index < 18 or 
 				sum(asthma_pre, coronary_heart_disease_pre, arrhythmia_pre, congenital_heart_pre, endocarditis_pre,
 				myopericarditis_pre, heartfailure_pre, heart_valve_disease_pre, cardiomyopathy_pre, other_heart_disease_pre, cancer_pre,

@@ -1,16 +1,20 @@
 /********************************************************************************************************************************************
-PROGRAM: 02_derive_cohort_3wk.sas
+PROGRAM: 02_derive_cohort_deliveries.sas
 PROGRAMMER: Chase Latour
-PURPOSE: To derive covariates for the pregnancies identified after modifying the LMP of non-deliveries by plus or minus 3 weeks. 
+PURPOSE: The purpose of this program is to extract covariate information for the pregnancy cohort we derived from marketScan claims data.
+However, this analysis is restricted to deliveries only.
 	
 Goal: 
 Output data: 
 
-Date: 12.19.20f24
+Date: 11.16.2025
 
-Updates:
-- CDL: 11.16.2025 -- Added covariates.
+
 ********************************************************************************************************************************************/
+
+
+
+
 
 
 
@@ -29,6 +33,11 @@ TABLE OF CONTENTS:
 
 
 
+
+
+
+
+
 /********************************************************************************************************************************************
 
 															00 - SET UP LIBRARIES
@@ -41,19 +50,18 @@ TABLE OF CONTENTS:
 /*options comamid=tcp remote=server; */
 /*signon username=_prompt_;*/
 
-
+*No errors;;
 *Run setup macro and define libnames;
 options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/programs/macros");
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=02_derive_cohort_3wk, savelog=Y);
-
+%setup(sample=full, programname=02_derive_cohort_deliveries, savelog=Y);
 
 
 
 ******************************************************************************************************************************************;
-/*Create local mirrors of the libraries from the set up macro - Run locally*/
+/*Create local mirros of the libraries from the set up macro - Run locally*/
 /*libname lout slibref=out server=server; */
 /*libname lana slibref=ana server=server;*/
 /*libname lpreg slibref=preg server=server;*/
@@ -76,7 +84,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 
 
 
-
+*No errors;
 
 /********************************************************************************************************************************************
 
@@ -106,8 +114,7 @@ empty dataset pregnancies_exp. Pregnancies_exp will be defined prior to applying
 		%let loop&d = %scan(&years, &d);
 
 		/*Create the dataset _exp_subset which contains all outpatient presription fills for nifedipine
-		or labetalol which occur between the indexing prenatal encounter and the maximum gestational age
-		for an index date. This is created for each year within the loop*/
+		or labetalol which occur between 4 and 23 weeks of gestation*/
 		proc sql;
 			create table _exp_subset as
 			select distinct a.enrolid as enrolid format=best12. length=8, a.ndcnum as ndcnum format=$12. length=12, 
@@ -120,7 +127,7 @@ empty dataset pregnancies_exp. Pregnancies_exp will be defined prior to applying
 				c.strength_uom format=$40. length=40, c.form as form format=$40. length=40
 			from (select * from raw.outptdrug&&loop&d where metqty > 0) as a
 			inner join _pregnancies as b
-			on a.enrolid = b.enrolid and b.dt_indexprenatal <= a.svcdate and a.svcdate <= b.max_index
+			on a.enrolid = b.enrolid and b.dt_lmp + 28 <= a.svcdate and a.svcdate <= b.max_fill
 			inner join (select distinct atc_label, ndc9, route, strength, strength_uom, form from exposure) as c
 			on substr(a.ndcnum, 1, 9) = c.ndc9
 			;
@@ -139,29 +146,30 @@ empty dataset pregnancies_exp. Pregnancies_exp will be defined prior to applying
 
 /*
 MACRO: derive_initial_cohort
-PURPOSE: This macro identifies any pregnancies with at least 1 fill for nifedipine or labetalol between the index date and the 
-maximum gestational age for an index date. This macro does not consider whether this represents initiation. That is an issue
+PURPOSE: This macro identifies any pregnancies with at least 1 fill for nifedipine or labetalol between 4 and 28 weeks of gestation. 
+This macro does not consider whether this represents initiation. That is an issue
 accomplished in a subsequent macro.
 
 LMPINDEX - The gestational age assigned to pregnancies with unknown outcomes without gestational age infomration
 MAXFILL - The maximum gestational age at which an indexing fill can occur.
 */
 
-%macro derive_initial_cohort(lmpindex, maxfill, suffix);
+%macro derive_initial_cohort(lmpindex);
 
 	/*TESTING:
 	%let lmpindex=63;
 	%let maxfill=258;
 	*/
 
-	%*The clean_preg_cohort file limited to pregnancies in the study frame. Output the number of rows in that dataset;
+	%*The clean_preg_cohort file limited to pregnancies in the study frame. Output the number of rows in that dataset
+	EXCLUDE THOSE PREGNANCIES THAT DO NOT END IN DELIVERY;
 	proc sql noprint;
 	    select count(*) 
 	    into :num_pregnancies_&lmpindex
-	    from ana.preg_cohort_&lmpindex._&suffix;
+	    from ana.preg_cohort_&lmpindex (where = (preg_outcome_clean in ('UDL' 'SB' 'LBS' 'LBM' 'MLS')));
 		quit;
 
-	%put Number of pregnancies in the cohort before requiring medication fills before &maxfill days gestation: &&num_pregnancies_&lmpindex;
+	%put Number of deliveries in the cohort before requiring medication fills before 22w0d days gestation: &&num_pregnancies_&lmpindex;
 
 
 
@@ -170,26 +178,18 @@ MAXFILL - The maximum gestational age at which an indexing fill can occur.
 	*******************/
 
 	%*Conduct some initial data cleaning of the pregnancy dataset so that we can link outpatient drug claims to the relevant
-	pregnancies. We want to subset, for now, to those pregnancies that have a defined index date that occurs prior to &maxfill;
+	pregnancies. We want to subset, for now, to those pregnancies that have a defined index date that occurs prior to maxfill;
 	data _pregnancies;
-	set ana.preg_cohort_&lmpindex._&suffix;
+	set ana.preg_cohort_&lmpindex;
+		%*Limit to those pregnancies that ended in delivery;
+		where preg_outcome_clean in ('UDL' 'SB' 'LBS' 'LBM' 'MLS');
 
 		%*Establish the date that the person was at the maximum gestational age for an index date;
-		max_index = dt_lmp + &maxfill;
+		max_index = dt_lmp + 160; *22w 6d of gestation;
 
-		%*If someone does not have an indexing prenatal encounter, then remove them from the dataset, as they definitionally cannot have an 
-		index date;
-		if dt_indexprenatal = . then delete;
 
-		%*If the indexing prenatal encounter occurs after the max index date, then remove the pregnancy from the dataset;
-		if dt_indexprenatal > max_index then delete;
-
-		/*CDL: 1.23.2025 -- ADDED the below delete statement*/
-		%*If someone has an outcome after their indexing prenatal encounter, then remove the pregnancy. This could occur because we used
-		groups of encounters with pregnancy outcome groups, and the prenatal encounter overlapped with that group. In those cases, the 
-		pregnancies should not be included in the dataset, as they essentially have no pre-outcome information, based on our best guess
-		of their pregnancy outcome date - misclassified prenatal encounter;
-		if dt_indexprenatal > dt_gapreg then delete;
+		%*Establish the latest date that someone can have a fill. This fill must occur prior to the delivery date;
+		max_fill = min(dt_gapreg - 1, dt_lmp + 160);
 
 	run;
 	%*Make sure that there are no duplicates;
@@ -197,25 +197,9 @@ MAXFILL - The maximum gestational age at which an indexing fill can occur.
 		by enrolid idxpren;
 	run;
 
-	%*Output the counts of individuals who had no indexing prenatal encounter and the counts
-	that had their indexing prenatal encounter after the maximum index date;
-	proc sql noprint;
-		select sum(dt_indexprenatal = .) as num_no_indexing_pnc_&lmpindex,
-			sum(dt_indexprenatal > dt_lmp + &maxfill) as num_indexing_pnc_after_max,
-			sum(dt_indexprenatal > dt_gapreg) as num_indexing_pnc_after_outc
-		into :num_no_indexing_pnc_&lmpindex,
-			:num_indexing_pnc_after_max,
-			:num_indexing_pnc_after_outc
-		from ana.preg_cohort_&lmpindex._&suffix;
-		quit;
-
-	%put Number of pregnancies removed because they had no indexing prenatal encounter: &&num_no_indexing_pnc_&lmpindex;
-	%put Number of pregnancies removed because their indexing prenatal encounters was after &maxfill days gestation: &num_indexing_pnc_after_max;
-	%put Number of pregnancies removed because their indexing prenatal encounter occurred after their outcome date: &num_indexing_pnc_after_outc ;
-
 
 	%*Now, we want to get all fill records for the retained pregnancies that
-		occurred between their indexing prenatal encounter and max gestation.
+		occurred between 4 and 22 weeks of gestation.
 		For now, we focus only on those with fills for nifedipine or labetalol.;
 
 	%*stack the labetalol and nifedipine datasets;
@@ -258,7 +242,7 @@ MAXFILL - The maximum gestational age at which an indexing fill can occur.
 
 	%*Link this information back onto the pregnancy dataset;
 	proc sql;
-		create table temp.pregs_with_index_&lmpindex._&suffix as
+		create table temp.pregnancies_del_with_index_&lmpindex as
 		select distinct a.*, b.svcdate as dt_index, b.ndcnum as ndc11, b.atc_label as exposure, b.age as age_at_index,
 			b.msa as msa_at_index format=Z5. length=4, b.region as region_at_index format=$3. length=3,
 			b.egeoloc as egeoloc_at_index format=$3. length=3, b.eestatu as eestatu_at_index format=$3. length=3,
@@ -268,7 +252,7 @@ MAXFILL - The maximum gestational age at which an indexing fill can occur.
 		from _pregnancies as a
 		inner join _index as b
 		on a.enrolid=b.enrolid and a.idxpren=b.idxpren
-		having a.dt_gapreg > b.svcdate /*Only include those individuals whose fills occurred AFTER the end of the pregnancy.*/
+		having a.dt_lmp + 28 <= b.svcdate <= a.max_fill /*Only include those individuals whose fills occurred in gestational age range*/
 		;
 		quit;
 
@@ -347,7 +331,7 @@ LOOKBACK_DT -- The date that we will use to anchor a lookback window. This is ei
 	or dt_lmp (sensitivity analysis)
 LOOKBACK_DAYS -- The number of days to look back from the lookback_dt (270 for primary and 180 based on LMP)
 ******************/
-%macro identify_new_users(lmpindex, lookbackdt, lookbackdays, suffix);
+%macro identify_new_users(lmpindex, lookbackdt, lookbackdays);
 
 	/* TESTING:
 	%let lmpindex=63;
@@ -357,7 +341,7 @@ LOOKBACK_DAYS -- The number of days to look back from the lookback_dt (270 for p
 
 	%*Pull in the dataset that we are going to be using;
 	data _pregnancies_index;
-	set temp.pregs_with_index_&lmpindex._&suffix;
+	set temp.pregnancies_with_index_&lmpindex;
 		length dt_lookback 8;
 		format dt_lookback MMDDYY10.;
 		
@@ -423,7 +407,7 @@ LOOKBACK_DAYS -- The number of days to look back from the lookback_dt (270 for p
 
 	%*Now subset to those pregnancies that are identified as new-users using an inner join;
 	proc sql;
-		create table temp.newusers_&lmpindex._&lookbackdt._&lookbackdays._&suffix as
+		create table temp.preg_del_newusers_&lmpindex._&lookbackdt._&lookbackdays as
 		select distinct a.*
 		from _pregnancies_index as a
 		inner join _new_users as b
@@ -479,8 +463,7 @@ BASE -- Empty dataset to which the pulled dataset will be added (i.e., via proc 
 		%let loop&d = %scan(&years, &d);
 
 		/*Create the dataset _med_subset which contains all outpatient presription fills for the input meds
-		between 270 days prior to the indexing prenatal encounter and 30 days after the indexing prenatal
-		encounter*/
+		between 270 days prior to the indexing prenatal encounter and 30 days after the indexing fill*/
 		proc sql;
 			create table _med_subset as
 			select distinct a.enrolid as enrolid format=best12. length=8, a.svcdate as svcdate format=MMDDYY10. length=8, 
@@ -497,7 +480,7 @@ BASE -- Empty dataset to which the pulled dataset will be added (i.e., via proc 
 			;
 			quit;
 
-		/*Append the pulled dataset to the base datatset*/
+		/*Append the pulled dataset to the base dataset*/
 		proc append base=&base data=_med_subset; run;
 
 		%*Output counts;
@@ -721,6 +704,9 @@ INPUT:
 
 	%get_dx_covariates(input_pregs=&PREG_INPT, input_ref = &REF, base = _diagnoses_covariate);
 
+	%*Save this dataset for subsequent review - diabetes results are not as expected;
+	data temp.covdiagnoses_&lmpindex._&lookbackdt._&lookbackdays; set _diagnoses_covariate; run;
+
 	%*Do some data cleaning on the codes;
 	data _diagnoses2;
 	set _diagnoses_covariate;
@@ -906,7 +892,7 @@ INPUT:
 	run;
 
 	%*Delete the unnecessary datasets;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _diagnoses_covaraites _diagnoses3 _diagnoses4 _diagnoses_subset
 			_pregnancies3 _pregnancies4_a 
 			_diagnoses3_ps _diagnoses4_ps _pregnancies3_ps _pregnancies4_b
@@ -915,12 +901,6 @@ INPUT:
 
 
 %mend;
-
-
-
-	
-
-	
 
 
 
@@ -939,7 +919,7 @@ lookbackdays -- the number of days we are looking back from lookbackdt to assign
 */
 
 
-%macro define_incl_excl(lmpindex, gap, lookbackdt, lookbackdays, suffix);
+%macro define_incl_excl(lmpindex, gap, lookbackdt, lookbackdays);
 
 	/*Testing
 	%let lmpindex=63;
@@ -955,7 +935,7 @@ lookbackdays -- the number of days we are looking back from lookbackdt to assign
 	********/
 
 	data _pregnancies;
-	set temp.newusers_&lmpindex._&lookbackdt._&lookbackdays._&suffix;
+	set temp.preg_newusers_&lmpindex._&lookbackdt._&lookbackdays;
 	run;
 
 
@@ -1165,7 +1145,7 @@ lookbackdays -- the number of days we are looking back from lookbackdt to assign
 
 
 	%*Delete unnecessary datasets to retain sufficient working memory;
-	proc datasets gennum = all;
+	proc datasets gennum = all noprint;
 		delete _enrollment:;
 	run;
 
@@ -1338,7 +1318,7 @@ lookbackdays -- the number of days we are looking back from lookbackdt to assign
 		quit;
 
 	%*Delete the unnecessary datasets;
-	proc datasets gennum = all;
+	proc datasets gennum = all noprint;
 		delete _asthma:;
 	run;
 
@@ -1458,7 +1438,7 @@ lookbackdays -- the number of days we are looking back from lookbackdt to assign
 		quit;
 
 	%*Delete unnecessary datasets;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _congenital:;
 	run;
 
@@ -1467,13 +1447,13 @@ lookbackdays -- the number of days we are looking back from lookbackdt to assign
 	/************
 		STEP 6: Output the final dataset
 	*************/
-	data temp.incl_excl_&lmpindex._&lookbackdt._&lookbackdays._&suffix;
+	data temp.preg_del_incl_excl_&lmpindex._&lookbackdt._&lookbackdays;
 	set _pregnancies6;
 	run;
 
 
 	%*Delete the rest of the datasets that output in the macro;
-	proc datasets gennum = all;
+	proc datasets gennum = all noprint;
 		delete _:;
 	run;
 
@@ -1734,6 +1714,11 @@ INPUTs:
 		where diagnosis = "Diabetes";
 	run;
 
+	%*Store a copy of the diabetes diagnoses -- CDL: added 1.30.2025 to ensure variables correct;
+	data temp.diabetes_dx_&lmpindex._&lookbackdt._&lookbackdays;
+	set _diabetes_diagnoses;
+	run;
+
 	*Add on the additional information that we need for diabetes:
 		(1) outcome from the diabetes reference file and
 		(2) dt_lmp from the pregnancies
@@ -1956,7 +1941,7 @@ INPUTs:
 	run;
 
 	%*Delete the unnecessary datasets;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _diabetes: _pregestational: _pregnancies_dx2
 			_pregnancies_dx3 _late: _early: _gestational: ;
 	run; quit; run;
@@ -2087,7 +2072,7 @@ INPUTs:
 	run;
 
 	%*Delete the unnecessary datasets;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _diabetes: _pregestational: _pregnancies_dx2
 			_pregnancies_dx3 _late: _early: _gestational: ;
 	run; quit; run;
@@ -2387,7 +2372,7 @@ PROC_REF -- Reference file for the procedure codes
 	%*All variables with missing values for the pr_ need to be replaces with 0.;
 
 	%*Delete the unnecessary datasets;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _covariate: _proc: early: _gtt: _late: _pregnancies_proc_diab _pregnancies_proc;
 	run; quit; run;
 
@@ -2422,6 +2407,9 @@ INPUTS:
 
 	%*Make sure that there are no duplicates - there should not be; /*CDL: 1.28.2025 - added this sort to be sure that there are no duplicates*/
 	proc sort data=_cov_meds nodup; by enrolid svcdate; run;
+
+	%*Output a version of this dataset that we can review later -- T2DM meds are unexpected and want to investigate more deeply;
+	data temp.cov_meds_&lmpindex._&lookbackdt._&lookbackdays; set _cov_meds; run;
 
 	%*Add an indicator for if the medication fill occurred before or after index;
 	data _cov_meds2;
@@ -2579,7 +2567,7 @@ INPUTS:
 	run;
 
 	%*Delete the unnecessary datasets;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _cov_meds: _pregnancies_rx: _meds_diabetes: _meds: ;
 	run; quit; run;
 
@@ -2700,7 +2688,7 @@ OUTPUT_DATA -- Output dataset of pregnancies
 		quit;
 
 	%*Delete unnecessary datasets;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _pregnancies_pnc _inpt: ;
 	run;
 
@@ -2723,7 +2711,7 @@ LOOKBACKDT -- The date from which we at looking back to define covarites: dt_ind
 LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt to define covariates
 */
 
-%macro get_allcovariates(LMPINDEX, LOOKBACKDT, LOOKBACKDAYS, SUFFIX);
+%macro get_allcovariates(LMPINDEX, LOOKBACKDT, LOOKBACKDAYS);
 
 	/*For testing:
 	%let lmpindex = 63;
@@ -2736,7 +2724,7 @@ LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt 
 
 	%*Pull in the pregnancies file that we will be working with;
 	data _pregnancies;
-	set temp.incl_excl_&lmpindex._&lookbackdt._&lookbackdays._&suffix;
+	set temp.preg_incl_excl_&lmpindex._&lookbackdt._&lookbackdays;
 
 		%*Make sure remove pregnancies with their indexing prenatal enocunter after their pregnancy outcome date;
 		/*CDL: 1.23.2025 -- Included this statement here becuase deletion originally not included in the first data cleaning step.
@@ -2755,7 +2743,11 @@ LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt 
 
 
 	%*First, identify all the relevant diagnosis code based information for diagnoses with simple algorithms that
-	rely on counts only. Implement same macro as in the inclusion and exclusion criteria;
+	rely on counts only. Implement same macro as in the inclusion and exclusion criteria
+
+	Covariates that STILL NEED TO BE HANDLED:
+	- diabetes
+	- antiphosphilipid syndrome;
 	%identify_dx_covariates(REF=cov_diagnoses, PREG_INPT=_pregnancies, OUTPUT=_pregnancies_dx);
 
 
@@ -2784,8 +2776,8 @@ LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt 
 		create table medications as
 		select distinct atc_label, ndc9, "ADHD" as medication from rxcov.adhd_meds_rx
 		union corr
-		/*CDL: Added - 4.16.2025*/
-		select distinct atc_label, ndc9, "Stimulant" as medication from rxcov.adhd_stimulants_rx
+		/*CDL: ADDED 4.16.2025 -- Wanted to be able to identify stimulants only*/
+		select distinct atc_label, ndc9, "Simulant" as medication from rxcov.adhd_stimulants_rx
 		union corr
 		select distinct atc_label, ndc9, "Anticonvul" as medication from rxcov.anticonvulsants_rx
 		union corr
@@ -2847,12 +2839,12 @@ LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt 
 
 
 	%*Output the final dataset;
-	data out.cohort_&lmpindex._&lookbackdt._&lookbackdays._&suffix;
+	data temp.preg_del_covar_&lmpindex._&lookbackdt._&lookbackdays;
 	set _pregnancies_health_use;
 	run;
 
 	%*Delete the unnecessary dataset;
-	proc datasets gennum=all;
+	proc datasets gennum=all noprint;
 		delete _:;
 	run;
 
@@ -2867,21 +2859,624 @@ LOOKBACKDAYS -- The number of days that we are looking back from the lookbackdt 
 
 
 
+
+
+
+
+
+
+
+
+
+/********************************************************************************************************************************************
+
+										04 - IDENTIFY POST-INDEX ANTIHYPERTENSIVES, PREECLAMPSIA, and PTB
+
+Derive post-index variables:
+- First fill for an antihypertensive other than the exposure
+- First fill for the other study medication
+- First date where we see a gap in usage: days supply + 0, 7, 14, and 30 d gap
+- The number of fills for non-exposure antihypertensive
+- The number of distinct ATC labels.
+- First preeclampsia diagnosis after the index date, on or before the outcome date.
+- The number of indicated preterm birth procedure codes 7 days before or after the outcome date
+- The number of spontaneous preterm birth diagnosis codes 7 days before or after the outcome date
+
+********************************************************************************************************************************************/
+
+
+%macro get_dx_outcomes(input_pregs, input_ref, base);
+
+	%let numYr = %sysfunc(countw(&years));
+
+	%do d=1 %to &numYr;
+
+		%let loop&d = %scan(&years, &d);
+
+		%*Create dataset with all relevant diagnosis codes for identified pregnancy for the year defined by &loop&d;
+		proc sql;
+			create table _diagnoses_subset as
+			select distinct a.enrolid format=best12. length=8, a.svcdate format=MMDDYY10. length=8, 
+				c.idxpren format=best12. length=8, c.dt_index format=MMDDYY10. length=8, 
+				a.dxLoc format=$9. length=9, a.dxNum format=best12. length=8, b.code format=$7. length=7, 
+				b.diagnosis format=$8. length=8
+			from %if &&loop&d = 2016 %then %do; der.alldx102016 %end; %else %do; der.alldx&&loop&d. %end; as a
+			inner join &input_pregs as c
+			on a.enrolid=c.enrolid and c.dt_index < a.svcdate <= c.dt_gapreg+14
+			inner join &input_ref as b
+			on a.dx&&loop&d. = b.code
+			;
+			quit;
+
+		%*Append the dataset onto the base dataset;
+		proc append base=&base data=_diagnoses_subset; run;
+
+	%end;
+
+%mend;
+
+
+
+
+
+/*
+MACRO: identify_htn_outcomes
+PURPOSE: The purpose of this macro is to identify the occurrence of preeclampsia after the index
+date. We are interested in the first diagnosis.
+
+INPUTs:
+- INPUT_DATA = input pregnancy datset
+- OUTPUT_DATA = output pregnancy datset
+- DIAGNOSES_DATA = dataset with diagnosis codes from the claims data
+*/
+
+%macro identify_htn_outcomes(INPUT_DATA, OUTPUT_DATA);
+
+	%*Create the reference codelist for preeclampsia;
+	proc sql;
+		create table preeclampsia as
+		select distinct code, "Preec" as diagnosis, 0 as exclusion_criteria, "" as outcome format=$57. length=57, "" as algorithm_step format=$9. length=9
+		from covref.preeclampsia_dx where codetype = "DX10"
+		;
+		quit;
+
+	%*Now get the relevant diagnosis codes for preeclampsia;
+	data _diagnoses_outcomes;
+		length enrolid 8 svcdate 8 idxpren 8 dt_index 8 dxLoc $9 dxNum 8 code $7 diagnosis $8;
+		format enrolid best12. svcdate MMDDYY10. idxpren best12. dt_index MMDDYY10. dxLoc $9. dxnum best12. code $7. diagnosis $8.;
+		stop;
+	run;
+
+	%get_dx_outcomes(input_pregs=&INPUT_DATA, input_ref = preeclampsia, base = _diagnoses_outcomes);
+
+	%*Do some data cleaning on the codes;
+	data _diagnoses2;
+	set _diagnoses_outcomes;
+		%*Determine if the diagnosis code was on an outpatient record (outpatient service claim) or inpatient record (inpatient service or
+			inpatient admission claim);
+		if dxLoc = "OutptServ" then location = "Outpt";
+			else if dxLoc in ("InptServ" "InptAdm") then location = "Inpt";
+			else location = "";
+		if location = "" then delete; /*Should not be a problem*/
+	run;
+
+	%*Now, we want the first instance after the index date, on or up to 2 weeks after the outcome date;
+	proc sql;
+		create table _diagnoses_outcomes2 as
+		select distinct enrolid, idxpren, location, min(svcdate) as dt_preeclampsia format=MMDDYY10.
+		from _diagnoses2
+		group by enrolid, idxpren, location
+		;
+		quit;
+
+	%*Transpose the dataset;
+	proc transpose data=_diagnoses_outcomes2 out=_diagnoses2_tranpose(drop = _NAME_) prefix=dt_preec_outc;
+		by enrolid idxpren;
+		var dt_preeclampsia;
+		id location;
+	run;
+
+	%*Now add those dates onto the output pregnancies dataset;
+	proc sql;
+		create table &OUTPUT_DATA as
+		select a.*, b.dt_preec_outcOutpt, b.dt_preec_outcInpt
+		from &INPUT_DATA as a
+		left join _diagnoses2_tranpose as b
+		on a.enrolid=b.enrolid and a.idxpren=b.idxpren
+		;
+		quit;
+
+	%*Delete the unnecessary datasets;
+	proc datasets gennum=all noprint;
+		delete _diagnoses: ;
+	run; quit; run;
+
+%mend;
+
+
+
+/*
+MACRO: get_proc_ptb_outcomes
+PURPOSE: To identify all procedure codes used to identify indicated preterm birth from the claims data
+*/
+
+
+%macro get_proc_ptb_outcomes(input_pregs, input_ref, base);
+
+	%let numYr = %sysfunc(countw(&years));
+
+	%do d=1 %to &numYr;
+
+		%let loop&d = %scan(&years, &d);
+
+		%*Create dataset with all relevant diagnosis codes for identified pregnancy for the year defined by &loop&d;
+		proc sql;
+			create table _proc_subset as
+			select distinct a.enrolid format=best12. length=8, a.svcdate format=MMDDYY10. length=8, 
+				c.idxpren format=best12. length=8, c.dt_index format=MMDDYY10. length=8, 
+				a.procLoc format=$9. length=9, b.code format=$7. length=7, 
+				b.diagnosis format=$8. length=8
+			from der.allproc&&loop&d. as a
+			inner join &input_pregs as c
+			on a.enrolid=c.enrolid and c.dt_gapreg - 7 <= a.svcdate <= c.dt_gapreg + 7
+			inner join &input_ref as b
+			on a.proc&&loop&d. = b.code
+			;
+			quit;
+
+		%*Append the dataset onto the base dataset;
+		proc append base=&base data=_proc_subset; run;
+
+	%end;
+
+%mend;
+
+
+
+
+/*
+MACRO: identify_ptb_outcomes
+PURPOSE: The purpose of this macro is to identify diagnosis codes related to indicated
+versus spontaneous preterm birth within 7 days of the index date.
+
+INPUTs:
+- INPUT_DATA = input pregnancy datset
+- OUTPUT_DATA = output pregnancy datset
+- DIAGNOSES_DATA = dataset with diagnosis codes from the claims data
+*/
+
+%macro identify_ptb_outcomes(INPUT_DATA, OUTPUT_DATA);
+
+
+	%**********************
+		Spontaneous PTB;
+
+
+	%*Create the reference codelist for spontaneous preterm birth;
+	proc sql;
+		create table spontaneous_ptb as
+		select distinct code, "SponPTB" as diagnosis, 0 as exclusion_criteria, "" as outcome format=$57. length=57, "" as algorithm_step format=$9. length=9
+		from covref.ptb_spontaneous_dx 
+		;
+		quit;
+
+	%*Now get the relevant diagnosis codes for spontaneous preterm birth;
+	data _diagnoses_outcomes;
+		length enrolid 8 svcdate 8 idxpren 8 dt_index 8 dxLoc $9 dxNum 8 code $7 diagnosis $8;
+		format enrolid best12. svcdate MMDDYY10. idxpren best12. dt_index MMDDYY10. dxLoc $9. dxnum best12. code $7. diagnosis $8.;
+		stop;
+	run;
+
+	%get_dx_outcomes(input_pregs=&INPUT_DATA, input_ref = spontaneous_ptb, base = _diagnoses_outcomes);
+
+	%*Do some data cleaning on the codes;
+	data _diagnoses2;
+	set _diagnoses_outcomes;
+		%*Determine if the diagnosis code was on an outpatient record (outpatient service claim) or inpatient record (inpatient service or
+			inpatient admission claim);
+		if dxLoc = "OutptServ" then location = "Outpt";
+			else if dxLoc in ("InptServ" "InptAdm") then location = "Inpt";
+			else location = "";
+		if location = "" then delete; /*Should not be a problem*/
+	run;
+
+	%*Add the outcome date information back onto the datset;
+	proc sql;
+		create table _diagnoses2_outc as
+		select a.*, b.dt_gapreg
+		from _diagnoses2 as a
+		left join &INPUT_DATA as b
+		on a.idxpren = b.idxpren
+		;
+		quit;
+
+	%*Now, only retain those rows where the service date occurs within 7 days of the outcome date;
+	data _diagnoses3;
+	set _diagnoses2_outc;
+
+		%*Create a variable for if the code was pre (including outcome date) or post outcome;
+		if svcdate <= dt_gapreg then timing = "pre";
+			else timing = "post";
+
+		if dt_gapreg - 7 <= svcdate and svcdate <= dt_gapreg + 7 then output;
+	run;
+
+	%*Now count all instances up to and including the outcome date and after the outcome date.;
+	proc sql;
+		create table _spon_ptb_counts as
+		select distinct enrolid, idxpren, location, timing, count(distinct svcdate) as numdx
+		from _diagnoses3
+		group by enrolid, idxpren, location, timing
+		;
+		quit;
+
+
+	%*Transpose the dataset so that each diagnosis, location, and timing  (pre v post index) are their own column.
+	These columns contain counts of the diagnoses that satisfy the requirement.
+	NOTE: If no one has a code that meets a criteria, then that column will not be created.;
+	proc transpose data=_spon_ptb_counts out=_spon_ptb_counts_trans (drop = _NAME_) prefix=sponptb_;
+		by enrolid idxpren;
+		id location timing;
+		var numdx;
+	run;
+
+
+
+
+	%**********************
+		Indicated PTB;
+
+
+	%*Create the reference codelist for spontaneous preterm birth;
+	proc sql;
+		create table indicated_ptb as
+		select distinct code, "IndPTB" as diagnosis, 0 as exclusion_criteria, "" as outcome format=$57. length=57, "" as algorithm_step format=$9. length=9
+		from covref.ptb_indicated_dx 
+		;
+		quit;
+
+	%*Now get the relevant diagnosis codes for spontaneous preterm birth;
+	data _proc_outcomes;
+		length enrolid 8 svcdate 8 idxpren 8 dt_index 8 procLoc $9 code $7 diagnosis $8;
+		format enrolid best12. svcdate MMDDYY10. idxpren best12. dt_index MMDDYY10. procLoc $9. code $7. diagnosis $8.;
+		stop;
+	run;
+
+	%get_proc_ptb_outcomes(input_pregs=&INPUT_DATA, input_ref = indicated_ptb, base = _proc_outcomes);
+
+	%*Do some data cleaning on the codes;
+	data _procedures2;
+	set _proc_outcomes;
+		%*Determine if the procedure code was on an outpatient record (outpatient service claim) or inpatient record (inpatient service or
+			inpatient admission claim);
+		if procLoc = "OutptServ" then location = "Outpt";
+			else if procLoc in ("InptServ" "InptAdm") then location = "Inpt";
+			else location = "";
+		if location = "" then delete; /*Should not be a problem*/
+	run;
+
+	%*Add the outcome date information back onto the datset;
+	proc sql;
+		create table _procedures2_outc as
+		select a.*, b.dt_gapreg
+		from _procedures2 as a
+		left join &INPUT_DATA as b
+		on a.idxpren = b.idxpren
+		;
+		quit;
+
+	%*Now, only retain those rows where the service date occurs within 7 days of the outcome date;
+	data _procedures3;
+	set _procedures2_outc;
+
+		%*Create a variable for if the code was pre (including outcome date) or post outcome;
+		if svcdate <= dt_gapreg then timing = "pre";
+			else timing = "post";
+
+		if dt_gapreg - 7 <= svcdate <= dt_gapreg + 7 then output;
+	run;
+
+	%*Now count all instances up to and including the outcome date and after the outcome date.;
+	proc sql;
+		create table _ind_ptb_counts as
+		select distinct enrolid, idxpren, location, timing, count(distinct svcdate) as numpr
+		from _procedures3
+		group by enrolid, idxpren, location, timing
+		;
+		quit;
+
+
+	%*Transpose the dataset so that each diagnosis, location, and timing  (pre v post index) are their own column.
+	These columns contain counts of the diagnoses that satisfy the requirement.
+	NOTE: If no one has a code that meets a criteria, then that column will not be created.;
+	proc transpose data=_ind_ptb_counts out=_ind_ptb_counts_trans (drop = _NAME_) prefix=indptb_;
+		by enrolid idxpren;
+		id location timing;
+		var numpr;
+	run;
+
+
+	%*Now add those dates onto the output pregnancies dataset -- Return just the minimum information;
+	proc sql;
+		create table &OUTPUT_DATA as
+		select a.enrolid, a.idxpren, b.*, c.* /*This will cause warnings becuase some duplicate variables across but are matching on those*/
+		from &INPUT_DATA as a
+		left join _spon_ptb_counts_trans as b
+		on a.enrolid=b.enrolid and a.idxpren=b.idxpren
+		left join _ind_ptb_counts_trans as c
+		on a.enrolid=c.enrolid and a.idxpren=c.idxpren
+		;
+		quit;
+
+	%*Delete the unnecessary datasets;
+	proc datasets gennum=all noprint;
+		delete _diagnoses: _procedures: _spon: _ind:;
+	run; quit; run;
+
+%mend;
+
+
+
+
+
+
+
+
+/*
+MACRO: get_postdx_antihypertensives
+PURPOSE: Go through all outpatient fills to identify those fills for antihypertensives
+that are either nifedipine, labetalol, or neither. This loops through all the separate
+year files from the raw data. In particular, we want to identify all those fills that occurred
+between the index date and the minimum .
+*/
+%macro get_postidx_antihypertensives(INPUT_DATA, BASE);
+
+	%let numYr = %sysfunc(countw(&years));
+
+	%do d=1 %to &numYr;
+
+		%let loop&d = %scan(&years, &d);
+
+		%*This is a subset of all the antihypertensive fills where a dispensing quantity was greater than 0. This is
+		created for each year and then appended (i.e., proc append) onto the _prior_antihypertensives;
+		proc sql;
+			create table _antihtn_subset as
+			select a.enrolid as enrolid format=best12. length=8, a.svcdate as svcdate format=MMDDYY10. length=8,
+				a.ndcnum as ndc11 format=$11. length=11, a.metqty as metqty format=best12. length=4,
+				a.daysupp as daysupp format=best12. length=3,
+				b.idxpren as idxpren format=BEST12. length=8, b.dt_index as dt_index format=MMDDYY10. length=8, 
+				b.exposure as exposure format=$56. length=56, c.atc_label as atc_label format=$56. length=56,
+				c.ndc9 as ndc9 format=$9. length=9
+			from (select distinct * from raw.outptdrug&&loop&d where metqty > 0) as a
+			inner join &INPUT_DATA as b /*Only grab those fills for pregnancies in the current dataset*/
+			on a.enrolid = b.enrolid and b.dt_index <= a.svcdate <= b.dt_gapreg /*Fills must occur between the lookback date and the index date*/
+			inner join (select distinct atc_label, ndc9 from rxcov.antihypertensives_rx) as c /*Link based upon NDC-9 code, as there may be missed packagings with NDC-11*/
+			on substr(a.ndcnum, 1, 9) = c.ndc9
+			;
+			quit;
+
+		proc append base=&BASE data=_antihtn_subset; run;
+
+		/*Output the number of pregnancies in that year*/
+		proc sql noprint;
+			select count(*) as num_pregnancies_loop_year
+			into :num_pregnancies_loop_year
+			from _antihtn_subset;
+			quit;
+
+		%put Number of pregnancies with qualifying antihypertensives in &&loop&d: &num_pregnancies_loop_year;
+
+	%end;
+
+%mend;
+
+
+
+/*
+MACRO: identify_postid_antihypertensives
+PURPOSE: To identify key variables that describe post-index antihypertensive fills
+
+INPUTS:
+LMPINDEX -- Assumed gestational age at index date for UNK pregnancies with no GA information
+LOOKBACKDT -- Date from which we apply lookback period: dt_index (primary) and dt_lmp (sensitivity)
+LOOKBACKDAYS -- Lookback period from LOOKBACKDT in days
+*/
+
+%macro identfy_postid_antihypertensives(LMPINDEX, LOOKBACKDT, LOOKBACKDAYS);
+
+	/*For testing:
+	%let lmpindex = 63;
+	%let lookbackdt = dt_index;
+	%let lookbackdays = 270;
+	*/
+
+	%*Identify all the years that we will need to pull sample data from;
+	%let years = 2016 2017 2018 2019 2020 2021 2022;
+
+	%*Upload the pregnancies dataset;
+	data _pregnancies;
+	set temp.preg_covar_&lmpindex._&lookbackdt._&lookbackdays;
+	run;
+
+	%*Get the post-index preeclampsia outcomes -- Added 3.27.2025;
+	%identify_htn_outcomes(INPUT_DATA=_pregnancies, OUTPUT_DATA=_postidx_preec);
+
+	%*Get the preterm birth information round the outcome date -- Added 4.16.2025;
+	%identify_ptb_outcomes(INPUT_DATA = _pregnancies, OUTPUT_DATA=_postidx_ptb)
+
+	%*Get all antihypertensive fills that occurred between the index date and dt_gapreg;
+
+	%*Create an empty dataset that we are going to append the records too. We need to manually set the length
+	and formats so that we avoid errors.;
+	data _postidx_antihypertensives;
+	    length enrolid 8 svcdate 8 ndc11 $11 metqty 4 daysupp 3 idxpren 8 dt_index 8 exposure $56 atc_label $56 ndc9 $9;
+	    format enrolid best12. svcdate MMDDYY10. ndc11 $11. metqty best12. daysupp best12. idxpren best12. dt_index MMDDYY10. exposure $56. atc_label $56. ndc9 $9.;
+	    stop;
+	run;
+
+	%get_postidx_antihypertensives(INPUT_DATA=_pregnancies, BASE=_postidx_antihypertensives);
+
+	%*Explicit statement to remove all duplicates, though there should not be any. CDL: ADDED 1.28.2025;
+	proc sort data=_postidx_antihypertensives nodup; by enrolid idxpren; run;
+	
+	%*We only want to save this dataset for the index date.;
+
+	%if &lookbackdt = dt_index %then %do;
+
+		%*Save this dataset in case needed;
+		data temp.postidx_antihypertensives_&lmpindex; set _postidx_antihypertensives; run;
+
+	%end;
+
+	%*****Identify key variables;
+
+	%*Identify the date of the first fill for an antihypertensive other than the exposure;
+	proc sql;
+		create table first_fill_any as
+		/*CDL: 1.28.2025 - added distinct*/
+		select distinct enrolid, idxpren, min(svcdate) as dt_first_nonexp_antihtn format=MMDDYY10.,
+			count(*) as num_nonexp_antihtn, count(distinct atc_label) as num_distinct_nonexp_antihtn
+		from _postidx_antihypertensives (where = (exposure ne atc_label))
+		group by enrolid, idxpren
+		;
+		quit;
+
+	%*First fill for the other study medication;
+	data _postidx_antihypertensives2;
+	set _postidx_antihypertensives;
+		if exposure = 'NIFEDIPINE' and ATC_LABEL = "LABETALOL" then other_exposure = 1;
+			else if exposure = "LABETALOL" and ATC_LABEL = "NIFEDIPINE" then other_exposure = 1;
+			else other_exposure = 0;
+	run;
+
+	proc sql;
+		create table _other_exposure as
+		/*CDL: 1.28.2025 - added distinct*/
+		select distinct enrolid, idxpren, min(svcdate) as dt_first_otherexp_antihtn format=MMDDYY10.,
+			count(*) as num_otherexp_antihtn
+		from _postidx_antihypertensives2 (where = (other_exposure = 1))
+		group by enrolid, idxpren
+		;
+		quit;
+
+
+	%*Identify the first date where we see a gap in usage of &medgap;
+
+	%*Subset to only those fills for the exposure;
+	data _exposure;
+	set _postidx_antihypertensives;
+		where exposure = atc_label;
+	run;
+
+	proc sort data=_exposure;
+		by enrolid idxpren svcdate;
+	run;
+	data _exposure2;
+	set _exposure;
+		format next_fill MMDDYY10. last_dt MMDDYY10.;
+		by enrolid idxpren svcdate;
+		retain count0 count7 count30 count45;
+
+		last_id = lag1(idxpren);
+		next_fill = svcdate + daysupp;
+		last_dt = lag1(next_fill);
+
+		if first.idxpren then count0 = 1;
+			else if idxpren = last_id and svcdate - last_dt > 0 then count0 = count0+1;
+			else count0 = count0;	
+
+		if first.idxpren then count7 = 1;
+			else if idxpren = last_id and svcdate - last_dt > 7 then count7 = count7+1;
+			else count7 = count7;
+
+		if first.idxpren then count30 = 1;
+			else if idxpren = last_id and svcdate - last_dt > 30 then count30 = count30+1;
+			else count30 = count30;
+
+		if first.idxpren then count45 = 1;
+			else if idxpren = last_id and svcdate - last_dt > 45 then count45 = count45+1;
+			else count45 = count45;
+	run;
+
+	%*Now the date of the first gap will be the next_fill date for the last row where count = 1;
+	data _exposure_0;
+	set _exposure2 (where = (count0 = 1));
+		by enrolid idxpren svcdate;
+		if last.idxpren then output;
+	run;
+
+	data _exposure_7;
+	set _exposure2 (where = (count7 = 1));
+		by enrolid idxpren svcdate;
+		if last.idxpren then output;
+	run;
+
+	data _exposure_30;
+	set _exposure2 (where = (count30 = 1));
+		by enrolid idxpren svcdate;
+		if last.idxpren then output;
+	run;
+
+	data _exposure_45;
+	set _exposure2 (where = (count45 = 1));
+		by enrolid idxpren svcdate;
+		if last.idxpren then output;
+	run;
+
+
+	%*Now put all of these variables onto the pregnancy dataset;
+	proc sql;
+		create table out.preg_del_cohort_&lmpindex._&lookbackdt._&lookbackdays as
+		/*CDL: 1.28.2025 - added distinct*/
+		select distinct a.*, b.dt_first_nonexp_antihtn, b.num_nonexp_antihtn, b.num_distinct_nonexp_antihtn,
+			c.dt_first_otherexp_antihtn, c.num_otherexp_antihtn,
+			e.svcdate as dt_lastfill_gap0, e.next_fill as dt_lastfill_daysupp_gap0 format=MMDDYY10.,
+			f.svcdate as dt_lastfill_gap7, f.next_fill as dt_lastfill_daysupp_gap7 format=MMDDYY10.,
+			g.svcdate as dt_lastfill_gap30, g.next_fill as dt_lastfill_daysupp_gap30 format=MMDDYY10.,
+			h.svcdate as dt_lastfill_gap45, h.next_fill as dt_lastfill_daysupp_gap45 format=MMDDYY10.,
+			i.dt_preec_outcOutpt, i.dt_preec_outcInpt, j.* /*This will cause some warnings on enrolid and idxpren.*/
+		from _pregnancies as a
+		left join first_fill_any as b
+		on a.enrolid=b.enrolid and a.idxpren=b.idxpren
+		left join _other_exposure as c
+		on a.enrolid=c.enrolid and a.idxpren=c.idxpren
+		left join _exposure_0 as e
+		on a.enrolid=e.enrolid and a.idxpren=e.idxpren
+		left join _exposure_7 as f
+		on a.enrolid=f.enrolid and a.idxpren=f.idxpren
+		left join _exposure_30 as g
+		on a.enrolid=g.enrolid and a.idxpren=g.idxpren
+		left join _exposure_45 as h
+		on a.enrolid=h.enrolid and a.idxpren=h.idxpren
+		left join _postidx_preec as i
+		on a.enrolid=i.enrolid and a.idxpren=i.idxpren
+		left join _postidx_ptb as j
+		on a.enrolid=j.enrolid and a.idxpren=j.idxpren
+		;
+		quit;
+
+%mend;
+
+
+
+
+
 /************************************************************************************************************
 
-										05 - PULL THE COVARIATE DATA
+											05 - PULL THE COHORT DATA
 
 ************************************************************************************************************/
 
-%********Subtract 21 days (3 weeks) from original LMP;
-/*%derive_initial_cohort(lmpindex = 63, maxfill = 258, suffix=m21); *maxfill = 36*7+6 or 36w6d;*/
-/*%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270, suffix=m21);*/
-/*%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270, suffix=m21);*/
-%get_allcovariates(lmpindex=63, lookbackdt = dt_index, lookbackdays=270, suffix=m21);
+%*******gestational age at index is 63 days and restrict to deliveries
 
-%******Add 21 days (3 weeks) to original LMP;
-/*%derive_initial_cohort(lmpindex = 63, maxfill = 258, suffix=p21); *maxfill = 36*7+6 or 36w6d;*/
-/*%identify_new_users(63, lookbackdt = dt_index, lookbackdays = 270, suffix=p21);*/
-/*%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_index, lookbackdays=270, suffix=p21);*/
-%get_allcovariates(lmpindex=63, lookbackdt = dt_index, lookbackdays=270, suffix=p21);
+
+%********gestational age at index is 63 days;
+%derive_initial_cohort(lmpindex = 63); *maxfill = 36*7+6 or 36w6d;
+proc datasets gennum=all noprint; delete _:; run;
+
+%*Index date analysis;
+%identify_new_users(63, lookbackdt = dt_lmp, lookbackdays = 180);
+%define_incl_excl(lmpindex=63, gap=31, lookbackdt = dt_lmp, lookbackdays=180);
+%get_allcovariates(lmpindex=63, lookbackdt = dt_lmp, lookbackdays=180);
+%identfy_postid_antihypertensives(lmpindex=63, lookbackdt = dt_lmp, lookbackdays=180);
 
