@@ -16,7 +16,7 @@ library(ggstance)
 
 # Pull in the Survival Data
 
-```{r cars}
+```{r }
 
 survival_loss_lt14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_primary_point_1.sas7bdat') %>% 
   mutate(
@@ -36,7 +36,7 @@ survival_ptb_lt14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/da
     GA = "<14 Weeks"
   )
 
-survival_ptb_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_primary_point_ptb_1.sas7bdat') %>% 
+survival_ptb_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/surv_primary_point_ptb_2.sas7bdat') %>% 
   mutate(
     Outcome = "Preterm Birth",
     GA = ">=14 Weeks"
@@ -71,6 +71,7 @@ survival_preec_inpt_ge14 <- read_sas('/local/projects/marketscan_preg/Latour_23_
 
 
 ```
+
 
 # Cumulative Incidence Curves for Study Outcomes
 
@@ -128,7 +129,7 @@ cum_incidence_primary(survivalds=survival_ptb_lt14,
 dev.off()
 
 pdf("Cumulative incidence-ptb-ge14 weeks.pdf", height=h, width=w)
-cum_incidence_primary(survivalds=survival_ptb_lt14,
+cum_incidence_primary(survivalds=survival_ptb_ge14,
                       outcome_quo="Preterm Birth",
                       ga_quo=">=14 Weeks")
 dev.off()
@@ -491,20 +492,20 @@ pbounds_loss_data <- function(bound_quo='partialb'){
 
 ### Function to get partial bounds for ptb -- Datasets were named differently from the others.
 
-pbounds_ptb_data <- function(bound_quo='partialb'){
+pbounds_ptb_data <- function(bound_quo='partialb', outcome_quo='ptb'){
   
   # Point Estimates
 
-  both_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_both.sas7bdat')) %>% 
+  both_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_', outcome_quo,'_overall_both.sas7bdat')) %>% 
     mutate(assumption = "Both")
 
-  none_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_none.sas7bdat')) %>% 
+  none_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_', outcome_quo,'_overall_none.sas7bdat')) %>% 
     mutate(assumption = "None")
 
-  nif_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_nif.sas7bdat')) %>% 
+  nif_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_', outcome_quo,'_overall_nif.sas7bdat')) %>% 
     mutate(assumption = "Nifedipine")
   
-  lab_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_ptb_overall_lab.sas7bdat')) %>% 
+  lab_est <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo, '_point_', outcome_quo,'_overall_lab.sas7bdat')) %>% 
     mutate(assumption = "Labetalol")
   
   est <- rbind(both_est, none_est) %>% 
@@ -513,16 +514,16 @@ pbounds_ptb_data <- function(bound_quo='partialb'){
   
   # Standard errors from bootstrap
   
-  both_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_both.sas7bdat')) %>%   
+  both_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_', outcome_quo,'_overall_both.sas7bdat')) %>%   
     mutate(assumption = "Both")
   
-  none_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_none.sas7bdat')) %>%   
+  none_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_', outcome_quo,'_overall_none.sas7bdat')) %>%   
     mutate(assumption = "None")
   
-  nif_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_nif.sas7bdat')) %>%   
+  nif_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_', outcome_quo,'_overall_nif.sas7bdat')) %>%   
     mutate(assumption = "Nifedipine")
   
-  lab_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_ptb_overall_lab.sas7bdat')) %>%   
+  lab_se <- read_sas(paste0('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/',bound_quo,'_boot_', outcome_quo,'_overall_lab.sas7bdat')) %>%   
     mutate(assumption = "Labetalol")
   
   se <- rbind(both_se, none_se) %>% 
@@ -1078,3 +1079,427 @@ dev.off()
 ```
 
 
+
+
+## Preeclampsia (Any Location)
+
+```{r}
+
+# point Estimate
+
+primary_preec <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_any_point_overall.sas7bdat')
+
+# SE viai bootstrap
+
+primary_preec_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_any_boot_overall.sas7bdat') %>% 
+  select(estimate, stderr) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_")
+
+# now join these together
+
+preec <- cbind(primary_preec, primary_preec_se) %>% 
+  mutate(
+    assumption = "Primary",
+    analysis = "Primary"
+  )
+
+## Get data for full Bounds
+
+full_preec <- bounds_data(outc_quo='pany',bound_quo='fullbounds') %>% 
+  mutate(analysis = "Full Bounds")
+
+## Get data for partial bounds
+
+partial_preec <- pbounds_ptb_data(bound_quo='partialb', outcome_quo = 'pany') %>% 
+  mutate(analysis = "Enrollment Bounds")
+
+# Make the figures
+
+preec_figures2 <- make_plot2(point_est = preec, 
+                         full_bounds = full_preec, 
+                         partial_bounds = partial_preec, 
+                         outcome_quo = "Preeclampsia")
+
+# Now print and save the figures as PDFs
+
+h <- 4.5
+w <- 4.5
+
+
+pdf("RDs_bounds_preec2.pdf", height=h, width=w)
+#jpeg("RDs_bounds_preec2.jpg", height=h, width=w, units="in", res=300)
+preec_figures2[[1]]
+dev.off()
+
+pdf("RRs_bounds_preec2.pdf", height=h, width=w)
+#jpeg("RRs_bounds_preec2.jpg", height=h, width=w,  units="in", res=300)
+preec_figures2[[2]]
+dev.off()
+
+
+
+
+# Make second set of figures with combined legend
+
+```
+
+
+# Figures For risks, RDs, and RRs combined
+
+## Pull in the necessary data
+
+```{r}
+
+# Pregnancy Loss
+
+### point Estimate
+primary_loss <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_overall.sas7bdat') %>% 
+  mutate(strata = 0,
+         outcome = "loss")
+loss1 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_1.sas7bdat') %>% 
+  mutate(strata = 1,
+         outcome = "loss")
+loss2 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_2.sas7bdat') %>% 
+  mutate(strata = 2,
+         outcome = "loss")
+strata_loss <- rbind(loss1, loss2) %>% 
+  rename(
+    risk0 = e0_risk,
+    risk1 = e1_risk,
+    rd = riskDiff,
+    rr = riskRatio
+  ) %>% 
+  select(risk0, risk1, rd, rr, strata, outcome)
+
+### SE via bootstrap
+primary_loss_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_boot_overall.sas7bdat') %>% 
+  select(estimate, stderr) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(strata = 0,
+         outcome = "loss")
+strata_loss_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_boot_strat.sas7bdat') %>% 
+  select(estimate, stderr, strata) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(id_cols = strata,
+              names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(outcome = "loss")
+
+
+## Now combine these all together
+
+point <- left_join(primary_loss, primary_loss_se, by = c("strata","outcome"))
+strata <- left_join(strata_loss, strata_loss_se, by = c("strata","outcome"))
+loss <- rbind(point, strata)
+
+
+
+
+# Preterm Birth
+
+### point Estimate
+primary_ptb <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_ptb_overall.sas7bdat') %>% 
+  mutate(strata = 0,
+         outcome = "ptb")
+ptb1 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_ptb_1.sas7bdat') %>% 
+  mutate(strata = 1,
+         outcome = "ptb")
+ptb2 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_point_ptb_2.sas7bdat') %>% 
+  mutate(strata = 2,
+         outcome = "ptb")
+strata_ptb <- rbind(ptb1, ptb2) %>% 
+  rename(
+    risk0 = e0_risk,
+    risk1 = e1_risk,
+    rd = riskDiff,
+    rr = riskRatio
+  ) %>% 
+  select(risk0, risk1, rd, rr, strata, outcome)
+
+### SE via bootstrap
+primary_ptb_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_ptb_boot_overall.sas7bdat') %>% 
+  select(estimate, stderr) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(strata = 0,
+         outcome = "ptb")
+strata_ptb_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/primary_ptb_boot_strat.sas7bdat') %>% 
+  select(estimate, stderr, strata) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(id_cols = strata,
+              names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(outcome = "ptb")
+
+
+## Now combine these all together
+
+point <- left_join(primary_ptb, primary_ptb_se, by = c("strata","outcome"))
+strata <- left_join(strata_ptb, strata_ptb_se, by = c("strata","outcome"))
+ptb <- rbind(point, strata)
+
+
+
+
+
+
+
+
+# Preeclampsia (Any service location)
+
+### point Estimate
+primary_preec <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_any_point_overall.sas7bdat') %>% 
+  mutate(strata = 0,
+         outcome = "preec")
+preec1 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_any_point_1.sas7bdat') %>% 
+  mutate(strata = 1,
+         outcome = "preec")
+preec2 <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_any_point_2.sas7bdat') %>% 
+  mutate(strata = 2,
+         outcome = "preec")
+strata_preec <- rbind(preec1, preec2) %>% 
+  rename(
+    risk0 = e0_risk,
+    risk1 = e1_risk,
+    rd = riskDiff,
+    rr = riskRatio
+  ) %>% 
+  select(risk0, risk1, rd, rr, strata, outcome)
+
+### SE via bootstrap
+primary_preec_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_any_boot_overall.sas7bdat') %>% 
+  select(estimate, stderr) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(strata = 0,
+         outcome = "preec")
+strata_preec_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_any_boot_strat.sas7bdat') %>% 
+  select(estimate, stderr, strata) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(id_cols = strata,
+              names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(outcome = "preec")
+
+
+## Now combine these all together
+
+point <- left_join(primary_preec, primary_preec_se, by = c("strata","outcome"))
+strata <- left_join(strata_preec, strata_preec_se, by = c("strata","outcome"))
+preec <- rbind(point, strata)
+
+
+
+
+
+
+
+
+# Preeclampsia (Inpatient)
+
+### point Estimate
+primary_preec_inpt <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_inpt_point_overall.sas7bdat') %>% 
+  mutate(strata = 0,
+         outcome = "preec_inpt")
+preec1_inpt <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_inpt_point_1.sas7bdat') %>% 
+  mutate(strata = 1,
+         outcome = "preec_inpt")
+preec2_inpt <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_inpt_point_2.sas7bdat') %>% 
+  mutate(strata = 2,
+         outcome = "preec_inpt")
+strata_preec_inpt <- rbind(preec1_inpt, preec2_inpt) %>% 
+  rename(
+    risk0 = e0_risk,
+    risk1 = e1_risk,
+    rd = riskDiff,
+    rr = riskRatio
+  ) %>% 
+  select(risk0, risk1, rd, rr, strata, outcome)
+
+### SE via bootstrap
+primary_preec_inpt_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_inpt_boot_overall.sas7bdat') %>% 
+  select(estimate, stderr) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(strata = 0,
+         outcome = "preec_inpt")
+strata_preec_inpt_se <- read_sas('/local/projects/marketscan_preg/Latour_23_2322/data/full/analysis/preec_inpt_boot_strat.sas7bdat') %>% 
+  select(estimate, stderr, strata) %>% 
+  filter(estimate == 'rd' | estimate == 'rr') %>% 
+  pivot_wider(id_cols = strata,
+              names_from = estimate, 
+              values_from = stderr, 
+              names_prefix = "se_") %>% 
+  mutate(outcome = "preec_inpt")
+
+
+## Now combine these all together
+
+point <- left_join(primary_preec_inpt, primary_preec_inpt_se, by = c("strata","outcome"))
+strata <- left_join(strata_preec_inpt, strata_preec_inpt_se, by = c("strata","outcome"))
+preec_inpt <- rbind(point, strata)
+
+
+
+
+# Now stack all of the datasets together
+point_estimates <- rbind(loss, ptb) %>% 
+  rbind(preec) %>% 
+  rbind(preec_inpt)
+
+```
+
+```{r}
+
+# For now, subset to just the overall estimates
+point_estimates_overall <- point_estimates %>% 
+  filter(strata == 0)
+
+point_estimates_overall$outcome <- factor(
+  point_estimates_overall$outcome,
+  levels = c("preec_inpt", "preec", "ptb", "loss"),
+  labels = c("Preeclampsia (Inpatient)",
+             "Preeclampsia (Any Location)",
+             "Preterm Birth",
+             "Pregnancy Loss")
+)
+
+## Calculate the confidence intervals
+
+z <- qnorm(0.975)
+
+point_estimates_overall <- point_estimates_overall %>% 
+  mutate(
+    rd_lcl = rd - (z*se_rd),
+    rd_ucl = rd + (z*se_rd),
+    rr_lcl = exp(log(rr) - (z*se_rr)),
+    rr_ucl = exp(log(rr) + (z*se_rr)),
+  )
+
+
+h <- 4.5
+w <- 4.5
+
+## Print the Risks
+
+pdf("Primary risks.pdf", height=h, width = w)
+
+# Transform the risks to percentages to align with the table.
+point_estimates_overall$risk0 <- 100*point_estimates_overall$risk0
+point_estimates_overall$risk1 <- 100*point_estimates_overall$risk1
+
+ggplot(point_estimates_overall) +
+  # Incidence bars for Nifedipine
+  geom_bar(aes(y = outcome, x=risk1, fill = "Nifedipine"), stat = "identity",
+           position = position_nudge(y = 0.2, x = 0.35), width = 0.4, alpha = 0.7) +
+  geom_bar(aes(y = outcome, x=risk0, fill = "Labetalol"), stat = "identity",
+           position = position_nudge(y = -0.2, x = 0.35), width = 0.4, alpha = 0.7) +
+  scale_fill_manual(
+    values = c(
+      "Nifedipine" = "navy",
+      "Labetalol" = "orange"
+    )
+  ) +
+  labs(y = NULL, 
+       x = "Risk (%)",
+       fill = "Treatment Group", 
+       ) +
+  theme_minimal() +
+  theme(text = element_text(color = "black"),
+        legend.position = "bottom",
+        axis.title.x.top = element_text(hjust = 0.8),
+        axis.text.y = element_text(size = 12, color = "black"),
+        axis.text.x = element_text(size = 12, color="black"),
+        strip.text = element_text(size = 12),
+        axis.title.x = element_text(size = 12, color = "black"),
+        legend.text = element_text(size =12)#,
+        #axis.title.x.bottom = element_text(hjust = 0.09)
+        ) +
+  theme(strip.placement = "outside") 
+
+dev.off()
+
+####
+
+
+# Plot the Risk Differences
+
+pdf("Primary risk differences.pdf", height=h, width = w)
+
+# Transform the risk differences and CIs to per 100
+point_estimates_overall$rd <- 100*point_estimates_overall$rd
+point_estimates_overall$rd_lcl <- 100*point_estimates_overall$rd_lcl
+point_estimates_overall$rd_ucl <- 100*point_estimates_overall$rd_ucl
+
+ggplot(point_estimates_overall) +
+  geom_point(aes(y = outcome, x = rd), size=3) +
+  geom_errorbarh(
+    aes(y = outcome, xmin = rd_lcl, xmax = rd_ucl),
+    height = 0.2
+  ) +
+  geom_vline(xintercept = 0) +
+  theme_minimal() +
+  labs(
+    y=NULL,
+    x="Risk Difference (per 100)"
+  ) +
+  theme(text = element_text(color = "black"),
+        legend.position = "bottom",
+        axis.title.x.top = element_text(hjust = 0.8),
+        axis.text.y = element_text(size = 12, color="black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, color = "black"),
+        strip.text = element_text(size = 12)#,
+        #axis.title.x.bottom = element_text(hjust = 0.09)
+  )
+
+dev.off()
+
+
+# Plot the Risk Ratios
+
+pdf("Primary risk ratios.pdf", height=h, width = w)
+
+ggplot(point_estimates_overall) +
+  geom_point(aes(y = outcome, x = rr), size=3) +
+  geom_errorbarh(
+    aes(y = outcome, xmin = rr_lcl, xmax = rr_ucl),
+    height = 0.2
+  ) +
+  geom_vline(xintercept = 1) +
+  scale_x_log10(limits = c(NA, 2)) +
+  theme_minimal() +
+  labs(
+    y=NULL,
+    x="Risk Ratio"
+  ) +
+  theme(text = element_text(color = "black"),
+        legend.position = "bottom",
+        axis.title.x.top = element_text(hjust = 0.8),
+        axis.text.y = element_text(size = 12, color="black"),
+        axis.text.x = element_text(size = 12, color = "black"),
+        axis.title.x = element_text(size = 12, color = "black"),
+        strip.text = element_text(size = 12)#,
+        #axis.title.x.bottom = element_text(hjust = 0.09)
+  )
+
+dev.off()
+
+
+
+```

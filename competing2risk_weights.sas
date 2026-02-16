@@ -55,47 +55,14 @@ INPUTS:
 - OUTDS_SURV = Name of the output dataset for the cumulative incidence/survival estimates
 - SMR = Indicator (Yes=1/No=0) to include SMR weights in the analysis
 - IPCW = Indicator (Yes=1/No=0) to include IPC weights in the analysis
+- spline = Indicator (Yes=1/No=) to include spline term in the IPCW model
 
 UPDATES:
 - 12.4.2025 -- Updated the IPCW model to be fit at weekly intervals.
+- 2.5.2026 -- Included a spline option. For the secondary analyses, spline was not supported.
 */
 
 
-
-/*TESTING:
-%let boot=0;
-%let inds=ana.primary_cohort;
-%let gacatvar = ga_index_cat;
-%let startDT=dt_index;
-%let outcomevar = preg_outcome_clean;
-%let eventDT=dt_GApreg;
-%let event = 'SAB' 'UAB' 'SB' 'MLS';
-%let cr1='IAB';
-%let cr2='LBM' 'LBS' 'UDL';
-%let psvars=ga_quartile age_at_index age_at_index_2
-			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			year_index2017*t2dmrx_post year_index2017*t1t2dmrx_post year_index2017*metforrx_post
-			diabetes_simp*t2dmrx_post diabetes_simp*t1t2dmrx_post diabetes_simp*metforrx_post
-			nausea_pre recurlos_pre obesity_post obesity_post*year_index2017
-			chronichypertension_pre substance_use_pre recurlos_pre ckd_post
-			thyroid_disorder_post thyroidrx_post thyroid_disorder_post*thyroidrx_post
-			depressi_post anxiety_post antideprx_post benzorx_post 
-			adhdrx_post teratrx_pre num_outptpnc num_outptpnc_2;
-%let dovars= ;
-%let psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre substance_use_pre
-			recurlos_pre ckd_post thyroid_disorder_post thyroidrx_post
-			depressi_post anxiety_post antideprx_post benzorx_post adhdrx_post
-			teratrx_pre ;
-%let doclassvars= ;
-%let dovarsmodel= ;
-%let trtvar=trt ;
-%let numiterations=1;
-%let initialseed=23244;
-%let outds=ana.primary_point_noipcw;
-%let outds_dist=ga_dist_primary_point_noipcw;
-%let outds_ps = ps_primary_point_noipcw;
-*/
 
 %macro competing2risk_weights(
 		boot=0,
@@ -120,7 +87,8 @@ UPDATES:
 		outds_ps = ps_primary,
 		outds_surv = surv_primary,
 		smr = 1,
-		ipcw=1
+		ipcw=1,
+		spline=1
 	   );
 
 
@@ -478,16 +446,28 @@ UPDATES:
 			%*Now fit the pooled logistic regressions to fit the stabilized inverse probability of censoring weights;
 	     	proc logistic data=___anacohort&g noprint; 
 				where combined = 0 ; %*CDL: ADDED 6.09.2025 -- Pooled logistic regression not supposed to be fit on events.;
-				effect spl = spline(in / details naturalcubic basis=tpf(noint) knotmethod=percentiles(5)); %*CDL: ADDED 12.4.2025 restricted cubic spline;
+				%if &spline=1 %then %do; %*CDL: MODIFIED 2.5.2026 -- Make the spline an option;
+					effect spl = spline(in / details naturalcubic basis=tpf(noint) knotmethod=percentiles(5)); %*CDL: ADDED 12.4.2025 restricted cubic spline;
+				%end;
 				class &doclassvars / param=ref; %*CDL: REMOVED in from class statement because will not converge;
-	        	model drop = &trtvar spl; 
+	        	model drop = &trtvar %if &spline=1 %then %do; spl %end; %else %do; in in*in %end; ; %*CDL: MODIFIED 2.6.2026 to make spline optional;
 				output out=num(keep=_id in dn) p=dn; 
 			run;
 	      	proc logistic data=___anacohort&g noprint; 
 				where combined = 0 ; %*CDL: ADDED 6.09.2025 -- Pooled logistic regression not supposed to be fit on events.;
-				effect spl = spline(in / details naturalcubic basis=tpf(noint) knotmethod=percentiles(5)); %*CDL: ADDED 12.4.2025 restricted cubic spline;
+				%if &spline=1 %then %do; %*CDL: MODIFIED 2.5.2026 -- Make the spline an option;
+					effect spl = spline(in / details naturalcubic basis=tpf(noint) knotmethod=percentiles(5)); %*CDL: ADDED 12.4.2025 restricted cubic spline;
+				%end;
 				class &doclassvars / param=ref; %*CDL: REMOVED in from class statement because will not converge;
-	        	model drop = &trtvar spl &dovarsmodel; 
+				%*CDL: MODIFIED 2.5.2026 to make spline optional;
+	        	model drop = &trtvar 
+							%if &spline = 1 %then %do;
+								spl 
+							%end;
+							%else %do;
+								in in*in
+							%end;
+							&dovarsmodel; 
 				output out=denom(keep=_id in dd) p=dd; 
 			run;
 
