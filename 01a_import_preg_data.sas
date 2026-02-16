@@ -86,7 +86,7 @@ libname ogtemp "/local/projects/marketscan_preg/raw_data/data/full";
 
 ********************************************************************************************************************************************/
 
-*We are only interested in those pregnancies from algorithm 30-3 with LMPs that occurred on or after January 1, 2016;
+*We are only interested in those pregnancies from algorithm 30-3 with LMPs that occurred on or after January 1, 2015;
 proc sql;
 	create table temp.pregnancies as
 	select distinct *

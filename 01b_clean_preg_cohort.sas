@@ -58,7 +58,7 @@ TABLE OF CONTENTS:
 
 options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/programs/macros");
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=random1pct, programname=01b_clean_preg_cohort, savelog=N);
+%setup(sample=full, programname=01b_clean_preg_cohort, savelog=N);
 
 
 ******************************************************************************************************************************************;
@@ -126,7 +126,6 @@ INPUTS:
 %let days = 307;
 %let lmpindex = 63;
 */
-
 
 
 %macro revise_too_long(INPUT_DATA, output_data, LMPINDEX, DAYS=307, round=0);
@@ -1943,3 +1942,16 @@ PURPOSE: To revise the LMPs for those pregnancies where the LMP was revised base
 
 
 
+
+
+/**Descriptives of the pregnancy cohort before and after cleaning;*/
+
+*Before cleaning;
+proc freq data=temp.pregnancies;
+	table preg_outcome_clean / missing;
+run;
+
+*After cleaning;
+proc freq data=ana.preg_cohort_63;
+	table preg_outcome_clean / missing;
+run;

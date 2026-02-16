@@ -93,6 +93,13 @@ proc format;
 		. = "Unknown"
 		0 = "Metropolitan area"
 		1 = "Rural area";
+	/*CDL: ADDED region 1.5.2026*/
+	value $region
+		"1" = "Northeast"
+		"2" = "North Central"
+		"3" = "South"
+		"4" = "West"
+		"5" = "Unknown";
 run;
 
 
@@ -114,7 +121,7 @@ set ana.preg_covar_63_dt_index_270;
 	*Revise the pregnancy outcome date and the pregnancy outcomes for those pregnancies that disenroll prior to their outcome;
 	if disenroll = 1 then do;
 		preg_outcome_clean = 'UNK';
-		dt_gapreg = cont_enrl_end_pnc_any;
+		dt_gapreg = cont_enrl_end_any; *CDL: CHANGED. Previously cont_enrl_end_pnc_any;
 	end;
 	else do;
 		preg_outcome_clean = preg_outcome_clean;

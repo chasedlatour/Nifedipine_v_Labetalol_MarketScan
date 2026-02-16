@@ -53,7 +53,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=07_complete_case, savelog=Y);
+%setup(sample=full, programname=07_complete_case, savelog=N);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/
@@ -94,6 +94,13 @@ proc format;
 		. = "Unknown"
 		0 = "Metropolitan area"
 		1 = "Rural area";
+	/*CDL: ADDED region 1.5.2026*/
+	value $region
+		"1" = "Northeast"
+		"2" = "North Central"
+		"3" = "South"
+		"4" = "West"
+		"5" = "Unknown";
 run;
 
 
@@ -113,22 +120,6 @@ set ana.primary_cohort;
 	if preg_outcome_clean in ('SAB' 'UAB' 'IAB') then loss = 1;
 		else loss = 0;
 
-run;
-
-*Check for any unexpected missingness;
-proc freq data=cca;
-	table loss / missing;
-run;
-
-proc freq data=cca;
-	table trt / missing;
-run;
-
-*Subset to complete cases where preterm birth outcome is unknown;
-data cca_ptb;
-set ana.primary_cohort;
-	where preg_outcome_ptb ne "UNK";
-
 	*Create a dichotmous variable for preterm birth prior to 37 weeks gestation;
 	if preg_outcome_ptb = "PTB" then preterm = 1;
 		else preterm = 0;
@@ -136,13 +127,16 @@ set ana.primary_cohort;
 run;
 
 *Check for any unexpected missingness;
-proc freq data=cca_ptb;
-	table preterm / missing;
+proc freq data=cca;
+	table loss  preterm / missing;
 run;
 
-proc freq data=cca_ptb;
+proc freq data=cca;
 	table trt / missing;
 run;
+
+
+
 
 
 		
@@ -257,7 +251,7 @@ options mlogic mprint symbolgen notes;
 *First, get the point estimate;
 %full_fup_weights(
 	boot = 0,
-	inds = cca_ptb,
+	inds = cca,
 	gacatvar = ga_index_cat,
 	outcomevar = preterm,
 	psvars=ga_quartile age_at_index age_at_index_2
@@ -278,7 +272,7 @@ options mlogic mprint symbolgen notes;
 *Second, run the bootstrap to get standard error;
 %full_fup_weights(
 	boot = 1,
-	inds = cca_ptb,
+	inds = cca,
 	gacatvar = ga_index_cat,
 	outcomevar = preterm,
 	psvars=ga_quartile age_at_index age_at_index_2

@@ -53,7 +53,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=24_delivery_only, savelog=N);
+%setup(sample=full, programname=24_delivery_only, savelog=Y);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/
@@ -94,6 +94,13 @@ proc format;
 		. = "Unknown"
 		0 = "Metropolitan area"
 		1 = "Rural area";
+	/*CDL: ADDED region 1.5.2026*/
+	value $region
+		"1" = "Northeast"
+		"2" = "North Central"
+		"3" = "South"
+		"4" = "West"
+		"5" = "Unknown";
 run;
 
 

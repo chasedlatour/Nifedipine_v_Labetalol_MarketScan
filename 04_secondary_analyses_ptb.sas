@@ -1,7 +1,10 @@
 /********************************************************************************************************************************************
-PROGRAM: 17_sens_udl.sas
+PROGRAM: 04_secondary_analyses.sas
 PROGRAMMER: Chase Latour
-PURPOSE: To conduct a sensitivity analysis where we assume that uncategorized deliveries (UDLs) are stillbirths (SBs).
+PURPOSE: The purpose of this program is to conduct the secondary analyses for the study.
+
+(1) Preterm birth at <28, <32, and <34 weeks of gestation
+(2) Pregnancy loss at <12, 12-20, and >20 weeks of gestation
 	
 Goal: 
 Output data: 
@@ -18,8 +21,7 @@ Date: 12.19.2024
 
 TABLE OF CONTENTS:
 	- 00 - SET UP LIBRARIES
-	- 01 - CONDUCT PREGNANCY LOSS ANALYSIS
-	- 02 - CONDUCT PRETERM BIRTH ANALYSIS
+	- 01 - CONDUCT PRETERM BIRTH ANALYSIS
 
 ********************************************************************************************************************************************/
 
@@ -52,7 +54,7 @@ options sasautos=(SASAUTOS "/local/projects/marketscan_preg/Latour_23_2322/progr
 /*options mprint;*/
 
 /*change "saveLog=" to "Y" when program is closer to complete*/
-%setup(sample=full, programname=17_sens_udl, savelog=Y);
+%setup(sample=full, programname=04_secondary_analyses_ptb, savelog=Y);
 
 ******************************************************************************************************************************************;
 /*Create local mirros of the libraries from the set up macro - Run locally*/
@@ -103,131 +105,6 @@ proc format;
 run;
 
 
-	
-	
-/********************************************************************************************************************************************
-
-														03 - CONDUCT PREGNANCY LOSS ANALYSIS
-
-********************************************************************************************************************************************/
-
-*Use ana.primary_cohort as the base dataset;
-
-*********Get point estimates;
-	
-*Now incorporate the IPCW;
-%competing2risk_weights(
-	boot=0, 
-	inds=ana.primary_cohort, 
-	gacatvar = ga_index_cat,
-	startDT=dt_index, 
-	outcomevar = preg_outcome_clean,
-	eventDT=dt_GApreg, 
-	event = 'SAB' 'SB' 'MLS' 'UDL',
-	cr1='IAB' 'UAB', 
-	cr2='LBM' 'LBS',
-	psvars=ga_quartile age_at_index age_at_index_2
-			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post 
-			teratrx_pre num_outptpnc num_outptpnc_2,
-	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
-			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post
-			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
-	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
-	trtvar=trt,
-	numiterations=1,
-	initialseed=23244, 
-	outds=ana.sensudl_point,
-	outds_dist=ga_dist_sensudl_point,
-	outds_ps = ps_sensudl_point,
-	outds_surv = NA
-	);
-
-*Combine the stratified estimates according to the distribution of GA at index among
-those in the treated group;
-%combine_point_estimates(
-	gadist = ana.ga_dist_sensudl_point,
-	numgastrat = 2,
-	est = ana.sensudl_point_,
-	outds = ana.sensudl_point_overall
-	);
-
-*********Finally, conduct the bootstrap for SE;
-	
-*Now incorporate the IPCW;
-%competing2risk_weights(
-	boot=1, 
-	inds=ana.primary_cohort, 
-	gacatvar = ga_index_cat,
-	startDT=dt_index, 
-	outcomevar = preg_outcome_clean,
-	eventDT=dt_GApreg, 
-	event = 'SAB' 'SB' 'MLS' 'UDL',
-	cr1='IAB' 'UAB', 
-	cr2='LBM' 'LBS',
-	psvars=ga_quartile age_at_index age_at_index_2
-			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post 
-			teratrx_pre num_outptpnc num_outptpnc_2,
-	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
-			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	dovarsmodel = ga_quartile age_at_index year_index4
-			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post
-			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
-	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
-	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
-			nausea_pre recurlos_pre obesity_post chronichypertension_pre
-			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
-	trtvar=trt, 
-	numiterations=1000,
-	initialseed=23244, 
-	outds=ana.sensudl_boot,
-	outds_dist=ga_dist_sensudl_boot,
-	outds_ps = ps_sensudl_boot,
-	outds_surv = NA
-	);
-	
-	
-options mlogic mprint symbolgen notes;
-*Combine all the bootstrapped estimates;
-%combine_boot_estimates(
-			inputEst= ana.sensudl_boot, 
-			inputDist= ana.ga_dist_sensudl_boot,
-			numStrata= 2, 
-			output_stratified= ana.sensudl_boot_strat,
-			output_overall= ana.sensudl_boot_overall);
-
-
-*Stratified estimates with confidence intervals.;
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_1, pointdsn=ana.sensudl_point_1, output=ana.sensudl_boot_1_ci);
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_2, pointdsn=ana.sensudl_point_2, output=ana.sensudl_boot_2_ci);
-
-*OVerall estimates with confidence interval;
-%overall_estimates_w_CI(stderrdsn=ana.sensudl_boot_overall, pointdsn=ana.sensudl_point_overall, output=ana.sensudl_overall_boot_ci);
-	
-
-
-%count_missing_zero(inds1=ana.sensudl_boot_1, inds2=ana.sensudl_boot_2);
-
-	
-	
 
 
 
@@ -236,41 +113,64 @@ options mlogic mprint symbolgen notes;
 
 /********************************************************************************************************************************************
 
-														04 - CONDUCT PRETERM BIRTH ANALYSIS
+												01 - CONDUCT PRETERM BIRTH ANALYSIS
 
 ********************************************************************************************************************************************/
-	
 
-data ana.primary_cohort;
+
+*Create preterm birth variables based on the specific GAs;
+data preterm;
 set ana.primary_cohort;
 
-	*Create outcome variable for preterm birth analyses where UDL is counted as SB;
-	if preg_outcome_clean in ('LBM' 'LBS') and dt_gapreg - dt_lmp < 259 then preg_outcome_ptb_udl = 'PTB';
-		else if dt_gapreg - dt_lmp >= 259 then preg_outcome_ptb_udl = 'TB'; /*If the outcome occurs after 37 weeks, then they survived the risk period. */
-		else preg_outcome_ptb_udl = preg_outcome_clean;
+	******Preterm prior to 28 weeks;
 
-	if preg_outcome_ptb = 'TB' then dt_gapreg_ptb_udl = dt_lmp + 258; /*36*7+6 = 258 -- They have a non-event at the end of the risk period*/
-		else dt_gapreg_ptb_udl = dt_gapreg;
+	*Event indicator;
+	if preg_outcome_clean in ('LBM' 'LBS' 'UDL') and dt_gapreg - dt_lmp < 196 then preg_outcome_ptb28 = 'PTB';
+		else if dt_gapreg - dt_lmp >= 196 then preg_outcome_ptb28 = 'TB';
+		else preg_outcome_ptb28 = preg_outcome_clean;
+
+	*Outcome time;
+	if preg_outcome_ptb28 = 'TB' then dt_gapreg_ptb28 = dt_lmp + 195;
+		else dt_gapreg_ptb28 = dt_gapreg;
+
+	*******Preterm prior to 32 weeks;
+
+	*Event indicator;
+	if preg_outcome_clean in ('LBM' 'LBS' 'UDL') and dt_gapreg - dt_lmp < 224 then preg_outcome_ptb32 = 'PTB';
+		else if dt_gapreg - dt_lmp >= 224 then preg_outcome_ptb32 = 'TB';
+		else preg_outcome_ptb32 = preg_outcome_clean;
+
+	*Outcome time;
+	if preg_outcome_ptb32 = 'TB' then dt_gapreg_ptb32 = dt_lmp + 223;
+		else dt_gapreg_ptb32 = dt_gapreg;
+
+	*******Preterm prior to 34 weeks;
+
+	*Event indicator;
+	if preg_outcome_clean in ('LBM' 'LBS' 'UDL') and dt_gapreg - dt_lmp < 238 then preg_outcome_ptb34 = 'PTB';
+		else if dt_gapreg - dt_lmp >= 238 then preg_outcome_ptb34 = 'TB';
+		else preg_outcome_ptb34 = preg_outcome_clean;
+
+	*Outcome time;
+	if preg_outcome_ptb34 = 'TB' then dt_gapreg_ptb34 = dt_lmp + 237;
+		else dt_gapreg_ptb34 = dt_gapreg;
 
 run;
 
-	
 
+*********PRETERM BIRTH PRIOR TO 28 WEEKS GESTATION;
 
-
-*********Get the point estimates;
-	
-*Now incorporate the IPCW;
+*Point estimates;	
 %competing3risk_weights(
 	boot=0, 
-	inds=ana.primary_cohort, 
+	inds=preterm, 
 	gacatvar = ga_index_cat,
 	startDT=dt_index, 
-	outcomevar = preg_outcome_ptb_udl,
-	eventDT=dt_GApreg_ptb_udl, 
+	outcomevar = preg_outcome_ptb28,
+	eventDT=dt_GApreg_ptb28, 
 	event = 'PTB',
-	cr1='IAB' 'UAB', 
-	cr2='SAB' 'SB' 'MLS' 'UDL',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
 	cr3='TB',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
@@ -294,34 +194,32 @@ run;
 	trtvar=trt,
 	numiterations=1,
 	initialseed=23244, 
-	outds=ana.sensudl_point_ptb,
-	outds_dist=ga_dist_sensudl_point_ptb,
-	outds_ps = NA,
+	outds=ana.second_point_ptb28,
+	outds_dist=ga_dist_second_point_ptb28,
+	outds_ps = ps_second_point_ptb28,
 	outds_surv = NA
 	);
 
 *Combine the stratified estimates according to the distribution of GA at index among
 those in the treated group;
 %combine_point_estimates(
-	gadist = ana.ga_dist_sensudl_point_ptb,
+	gadist = ana.ga_dist_second_point_ptb28,
 	numgastrat = 2,
-	est = ana.sensudl_point_ptb_,
-	outds = ana.sensudl_point_ptb_overall
+	est = ana.second_point_ptb28_,
+	outds = ana.second_point_ptb28_overall
 	);
-
-
-*********Finally, conduct the bootstrap for SE;
 	
+*Conduct the bootstrap to get the variance;
 %competing3risk_weights(
 	boot=1, 
-	inds=ana.primary_cohort, 
+	inds=preterm, 
 	gacatvar = ga_index_cat,
 	startDT=dt_index, 
-	outcomevar = preg_outcome_ptb_udl,
-	eventDT=dt_GApreg_ptb_udl, 
+	outcomevar = preg_outcome_ptb28,
+	eventDT=dt_GApreg_ptb28, 
 	event = 'PTB',
-	cr1='IAB' 'UAB', 
-	cr2='SAB' 'SB' 'MLS' 'UDL',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
 	cr3='TB',
 	psvars=ga_quartile age_at_index age_at_index_2
 			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
@@ -345,31 +243,267 @@ those in the treated group;
 	trtvar=trt,
 	numiterations=1000,
 	initialseed=23244, 
-	outds=ana.sensudl_boot_ptb,
-	outds_dist=ga_dist_sensudl_boot_ptb,
-	outds_ps = NA,
+	outds=ana.second_boot_ptb28,
+	outds_dist=ga_dist_second_boot_ptb28,
+	outds_ps = ps_second_boot_ptb28,
 	outds_surv = NA
 	);
-	
 	
 options mlogic mprint symbolgen notes;
 *Combine all the bootstrapped estimates;
 %combine_boot_estimates(
-			inputEst= ana.sensudl_boot_ptb,
-			inputDist= ana.ga_dist_sensudl_boot_ptb,
+			inputEst= ana.second_boot_ptb28, 
+			inputDist= ana.ga_dist_second_boot_ptb28,
 			numStrata= 2, 
-			output_stratified= ana.sensudl_ptb_boot_strat,
-			output_overall= ana.sensudl_ptb_boot_overall);
+			output_stratified= ana.second_ptb28_boot_strat,
+			output_overall= ana.second_ptb28_boot_overall);
 
 *Stratified estimates with confidence intervals.;
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_ptb_1, pointdsn=ana.sensudl_point_ptb_1, output=ana.sensudl_boot_ptb_1_ci);
-%strat_estimates_w_CI(bootdsn=ana.sensudl_boot_ptb_2, pointdsn=ana.sensudl_point_ptb_2, output=ana.sensudl_boot_ptb_2_ci);
+%strat_estimates_w_CI(bootdsn=ana.second_boot_ptb28_1, pointdsn=ana.second_point_ptb28_1, output=ana.second_boot_ptb28_1_ci);
+%strat_estimates_w_CI(bootdsn=ana.second_boot_ptb28_2, pointdsn=ana.second_point_ptb28_2, output=ana.second_boot_ptb28_2_ci);
 
 *OVerall estimates with confidence interval;
-%overall_estimates_w_CI(stderrdsn=ana.sensudl_ptb_boot_overall, pointdsn=ana.sensudl_point_ptb_overall, output=ana.sensudl_overall_ptb_boot_ci);
+%overall_estimates_w_CI(stderrdsn=ana.second_ptb28_boot_overall, pointdsn=ana.second_point_ptb28_overall, output=ana.second_overall_ptb28_boot_ci);
 
 	
-%count_missing_zero(inds1=ana.sensudl_boot_ptb_1, inds2=ana.sensudl_boot_ptb_2);
+*Count the number with zero risks, or missing effect esitmates;
+%count_missing_zero(inds1=ana.second_boot_ptb28_1, inds2=ana.second_boot_ptb28_2);
+
+
+
+
+
+
+
+
+
+*********PRETERM BIRTH PRIOR TO 32 WEEKS GESTATION;
+
+*Point estimates;	
+%competing3risk_weights(
+	boot=0, 
+	inds=preterm, 
+	gacatvar = ga_index_cat,
+	startDT=dt_index, 
+	outcomevar = preg_outcome_ptb32,
+	eventDT=dt_GApreg_ptb32, 
+	event = 'PTB',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='TB',
+	psvars=ga_quartile age_at_index age_at_index_2
+			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post 
+			teratrx_pre num_outptpnc num_outptpnc_2,
+	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
+			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	dovarsmodel = ga_quartile age_at_index year_index4
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post
+			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
+	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
+	trtvar=trt,
+	numiterations=1,
+	initialseed=23244, 
+	outds=ana.second_point_ptb32,
+	outds_dist=ga_dist_second_point_ptb32,
+	outds_ps = ps_second_point_ptb32,
+	outds_surv = NA
+	);
+
+*Combine the stratified estimates according to the distribution of GA at index among
+those in the treated group;
+%combine_point_estimates(
+	gadist = ana.ga_dist_second_point_ptb32,
+	numgastrat = 2,
+	est = ana.second_point_ptb32_,
+	outds = ana.second_point_ptb32_overall
+	);
+	
+*Conduct the bootstrap to get the variance;
+%competing3risk_weights(
+	boot=1, 
+	inds=preterm, 
+	gacatvar = ga_index_cat,
+	startDT=dt_index, 
+	outcomevar = preg_outcome_ptb32,
+	eventDT=dt_GApreg_ptb32, 
+	event = 'PTB',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='TB',
+	psvars=ga_quartile age_at_index age_at_index_2
+			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post 
+			teratrx_pre num_outptpnc num_outptpnc_2,
+	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
+			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	dovarsmodel = ga_quartile age_at_index year_index4
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post
+			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
+	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
+	trtvar=trt,
+	numiterations=1000,
+	initialseed=23244, 
+	outds=ana.second_boot_ptb32,
+	outds_dist=ga_dist_second_boot_ptb32,
+	outds_ps = ps_second_boot_ptb32,
+	outds_surv = NA
+	);
+	
+options mlogic mprint symbolgen notes;
+*Combine all the bootstrapped estimates;
+%combine_boot_estimates(
+			inputEst= ana.second_boot_ptb32, 
+			inputDist= ana.ga_dist_second_boot_ptb32,
+			numStrata= 2, 
+			output_stratified= ana.second_ptb32_boot_strat,
+			output_overall= ana.second_ptb32_boot_overall);
+
+*Stratified estimates with confidence intervals.;
+%strat_estimates_w_CI(bootdsn=ana.second_boot_ptb32_1, pointdsn=ana.second_point_ptb32_1, output=ana.second_boot_ptb32_1_ci);
+%strat_estimates_w_CI(bootdsn=ana.second_boot_ptb32_2, pointdsn=ana.second_point_ptb32_2, output=ana.second_boot_ptb32_2_ci);
+
+*OVerall estimates with confidence interval;
+%overall_estimates_w_CI(stderrdsn=ana.second_ptb32_boot_overall, pointdsn=ana.second_point_ptb32_overall, output=ana.second_overall_ptb32_boot_ci);
+
+%count_missing_zero(inds1=ana.second_boot_ptb32_1, inds2=ana.second_boot_ptb32_2);
+
+
+
+
+
+
+*********PRETERM BIRTH PRIOR TO 34 WEEKS GESTATION;
+
+*Point estimates;	
+%competing3risk_weights(
+	boot=0, 
+	inds=preterm, 
+	gacatvar = ga_index_cat,
+	startDT=dt_index, 
+	outcomevar = preg_outcome_ptb34,
+	eventDT=dt_GApreg_ptb34, 
+	event = 'PTB',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='TB',
+	psvars=ga_quartile age_at_index age_at_index_2
+			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post 
+			teratrx_pre num_outptpnc num_outptpnc_2,
+	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
+			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	dovarsmodel = ga_quartile age_at_index year_index4
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post
+			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
+	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
+	trtvar=trt,
+	numiterations=1,
+	initialseed=23244, 
+	outds=ana.second_point_ptb34,
+	outds_dist=ga_dist_second_point_ptb34,
+	outds_ps = ps_second_point_ptb34,
+	outds_surv = NA
+	);
+
+*Combine the stratified estimates according to the distribution of GA at index among
+those in the treated group;
+%combine_point_estimates(
+	gadist = ana.ga_dist_second_point_ptb34,
+	numgastrat = 2,
+	est = ana.second_point_ptb34_,
+	outds = ana.second_point_ptb34_overall
+	);
+	
+*Conduct the bootstrap to get the variance;
+%competing3risk_weights(
+	boot=1, 
+	inds=preterm, 
+	gacatvar = ga_index_cat,
+	startDT=dt_index, 
+	outcomevar = preg_outcome_ptb34,
+	eventDT=dt_GApreg_ptb34, 
+	event = 'PTB',
+	cr1='IAB', 
+	cr2='SAB' 'UAB' 'SB' 'MLS',
+	cr3='TB',
+	psvars=ga_quartile age_at_index age_at_index_2
+			year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post 
+			teratrx_pre num_outptpnc num_outptpnc_2,
+	dovars=ga_quartile age_at_index year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre depressi_post anxiety_post antideprx_post 
+			benzorx_post teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	dovarsmodel = ga_quartile age_at_index year_index4
+			t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp 
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post
+			teratrx_pre num_outptpnc num_outptpnc_2 rural2,
+	psclassvars=ga_quartile year_index2017 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre 
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre, 
+	doclassvars=ga_quartile year_index4 t2dmrx_post t1t2dmrx_post metforrx_post diabetes_simp
+			nausea_pre recurlos_pre obesity_post chronichypertension_pre
+			depressi_post anxiety_post antideprx_post benzorx_post teratrx_pre rural2,
+	trtvar=trt,
+	numiterations=1000,
+	initialseed=23244, 
+	outds=ana.second_boot_ptb34,
+	outds_dist=ga_dist_second_boot_ptb34,
+	outds_ps = ps_second_boot_ptb34,
+	outds_surv = NA
+	);
+	
+options mlogic mprint symbolgen notes;
+*Combine all the bootstrapped estimates;
+%combine_boot_estimates(
+			inputEst= ana.second_boot_ptb34, 
+			inputDist= ana.ga_dist_second_boot_ptb34,
+			numStrata= 2, 
+			output_stratified= ana.second_ptb34_boot_strat,
+			output_overall= ana.second_ptb34_boot_overall);
+
+*Stratified estimates with confidence intervals.;
+%strat_estimates_w_CI(bootdsn=ana.second_boot_ptb34_1, pointdsn=ana.second_point_ptb34_1, output=ana.second_boot_ptb34_1_ci);
+%strat_estimates_w_CI(bootdsn=ana.second_boot_ptb34_2, pointdsn=ana.second_point_ptb34_2, output=ana.second_boot_ptb34_2_ci);
+
+*OVerall estimates with confidence interval;
+%overall_estimates_w_CI(stderrdsn=ana.second_ptb34_boot_overall, pointdsn=ana.second_point_ptb34_overall, output=ana.second_overall_ptb34_boot_ci);
+
+
+%count_missing_zero(inds1=ana.second_boot_ptb34_1, inds2=ana.second_boot_ptb34_2);
+
+
+
+
 
 
 

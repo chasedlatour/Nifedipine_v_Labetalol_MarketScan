@@ -113,15 +113,16 @@ run;
 
 ********************************************************************************************************************************************/
 
-*The file temp.postidx_antihypertensives_63 contains infomration for all the antihypertensive fills for a pregnancy
+*The file temp.postidx_antihypertensives_63 contains information for all the antihypertensive fills for a pregnancy
 between their index date and the outcome date. The 63 (9 weeks) represents the gestational age that we assumed at index for pregnancies
-with UNK outcomes and no gestational age information;
+with UNK outcomes and no gestational age information. This should index lookback based on the first fill date (i.e., initiation), not
+the LMP.;
 
 
 *First, merge the treatment variable onto the dataset;
 proc sql;
 	create table pregnancies as
-	select a.enrolid, a.trt, a.dt_gapreg, b.*
+	select a.trt, a.dt_gapreg, b.*
 	from ana.primary_cohort as a
 	left join temp.postidx_antihypertensives_63 as b
 	on  a.idxpren=b.idxpren
@@ -131,14 +132,14 @@ proc sql;
 
 /**Look at the distribution of ATC labels within this dataset of antihypertensives between*/
 /*the index date and pregnancy outcome or LTFU date;*/
-/*proc freq data=cohort;*/
+/*proc freq data=pregnancies;*/
 /*	table atc_label / missing;*/
 /*run;*/
 
 
 
 *Create counts of the number of people, by treatment, that filled a medication other than 
-their initiation medication after their index date and prior to their pregnancy outcome 
+their initiation medication after their index date and prior to their pregnancy outcome or LTFU
 date;
 proc sql;
 	create table non_initiation_counts as
@@ -155,7 +156,7 @@ run;
 
 
 
-*Now, we want to know information about when the person discontinued their initial antihypertensive, if they did
+*Now, we want to know information about when the person discontinued their initial antihypertensive, if they did.
 
 For this analysis, we define discontinuation as experiencing a gap in medications at home, based upon days supply
 for the medication, allowing for a 30-day gap in fills.;
@@ -191,7 +192,7 @@ set cohort;
 			days_between = svcdate - last_date;
 
 			if svcdate < last_date then do;
-				next_fill = svcdate + daysupp; *abs(days_between) + daysupp;
+				next_fill = svcdate + daysupp + abs(days_between); *abs(days_between) + daysupp;
 				last_date = next_fill;
 			end;
 				else do;
@@ -200,7 +201,9 @@ set cohort;
 				end; 
 		end;
 
-	last_dt = lag1(next_fill);
+/*	last_dt = lag1(next_fill);*/
+
+	drop last_date;
 
 	if first.idxpren then count30 = 1;
 		else if days_between > 30 then count30 = count30+1;

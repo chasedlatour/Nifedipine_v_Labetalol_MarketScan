@@ -94,6 +94,13 @@ proc format;
 		. = "Unknown"
 		0 = "Metropolitan area"
 		1 = "Rural area";
+	/*CDL: ADDED region 1.5.2026*/
+	value $region
+		"1" = "Northeast"
+		"2" = "North Central"
+		"3" = "South"
+		"4" = "West"
+		"5" = "Unknown";
 run;
 
 
@@ -177,6 +184,12 @@ proc sort data=partial_bounds; by trt; run;
 proc freq data=partial_bounds noprint;
 	where preg_outcome_clean = "UNK";
 	table daysle31 / out=ana.partial_bounds_count_loss;
+run;
+
+*Get counts of pregnancies that need imputed outcomes.;
+proc freq data=partial_bounds;
+	where preg_outcome_clean = "UNK" and daysle31 = 0;
+	table trt / missing;
 run;
 
 
